@@ -9,7 +9,8 @@ t0= time.time()
 print(t0)
 # Load the image and convert to grayscale
 #image = cv2.imread("apriltags_page_1.png")
-image = cv2.imread("t2test5_Color.png")
+#image = cv2.imread("t2test5_Color.png")
+image = cv2.imread("margin_test3.jpg")
 #image = cv2.imread("sheet6.JPG")
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
