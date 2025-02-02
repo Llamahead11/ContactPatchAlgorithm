@@ -63,7 +63,7 @@ if __name__ == "__main__":
     depth_sensor = profile.get_device().first_depth_sensor()
     depth_sensor.set_option(rs.option.visual_preset, Preset.HighAccuracy)
     depth_sensor.set_option(rs.option.exposure,1000)
-    depth_sensor.set_option(rs.option.gain, 248)
+    depth_sensor.set_option(rs.option.gain, 150)
 
     spatial_filter = rs.spatial_filter()  # Spatial filter
     spatial_filter.set_option(rs.option.filter_magnitude, 2)  # Adjust filter magnitude
@@ -102,12 +102,11 @@ if __name__ == "__main__":
     
     intrinsic = o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json")
     depth_scale = 0.1
-    origin = o3d.t.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-    source_pcd = o3d.geometry.PointCloud()
-    #vis = o3d.visualization.Visualizer()
-    #vis.create_window()
-    #vis.add_geometry(origin.to_legacy())
-    #create_o3d_obj = False
+    
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+
     try:
         while True:
             frames = pipeline.wait_for_frames()
@@ -134,25 +133,11 @@ if __name__ == "__main__":
             depth_image_scaled = o3d.geometry.Image(depth_image_scaled)
             color_image_o3d = o3d.geometry.Image(color_image)
             source_rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_image_o3d, depth_image_scaled)
-            # source_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(source_rgbd_image, intrinsic)
-            # source_pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
-            # source_pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-            # pcd_tree = o3d.geometry.KDTreeFlann(source_pcd)
+            source_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(source_rgbd_image, intrinsic)
+            source_pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+            source_pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+            pcd_tree = o3d.geometry.KDTreeFlann(source_pcd)
 
-            # if not create_o3d_obj:
-            #     vis.add_geometry(source_pcd)  # add point cloud
-            #     create_o3d_obj = True  # change flag
-            # else:
-            #     vis.update_geometry(source_pcd)  # update point cloud
-            
-            # if not vis.poll_events():
-            #     break
-            # vis.update_renderer()
-            # time.sleep(1)
-            # transform_array = []
-
-            # mesh_frame = o3d.t.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
-            
             tags = []
             tag_loc = []
             # t2cam_correspondence = []
@@ -160,10 +145,14 @@ if __name__ == "__main__":
             # Detect Tags from image stream
             gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
             detections = detector.detect(gray)
-            for detection in detections:
-                # Store detected tag ID
-                #tags.append(detection.tag_id)
 
+            # Print number of detections from the current frame
+            print(len(detections), " AprilTags")
+
+            # Initiate number of failed 3D coords from april tags
+            fail_count_per_frame = 0
+
+            for detection in detections:
                 # Draw lines around the tag
                 #(ptA, ptB, ptC, ptD) = detection.corners
                 for i in range(4):
@@ -177,21 +166,28 @@ if __name__ == "__main__":
                 cent_y = int(detection.center[1])
                 
                 depth_val = np.asarray(source_rgbd_image.depth)[cent_y,cent_x]
-                print("Depth",depth_val)
+                #print("Depth",depth_val)
+                
 
                 fx = intrinsic.intrinsic_matrix[0, 0]
                 fy = intrinsic.intrinsic_matrix[1, 1]
                 cx = intrinsic.intrinsic_matrix[0, 2]
                 cy = intrinsic.intrinsic_matrix[1, 2]
 
-                print([fx,fy,cx,cy])
+                #print([fx,fy,cx,cy])
 
                 x = (cent_x - cx) * depth_val / fx
                 y = (cent_y - cy) * depth_val / fy 
                 z = depth_val
 
-                tag_loc.append([x,-y,-z])
-                print("Point Coords",[x,y,z])
+                if depth_val == 0.0:
+                    fail_count_per_frame += 1
+                else:
+                    # Store detected tag ID
+                    tags.append(detection.tag_id)
+                    tag_loc.append([x,-y,-z])
+
+                #print("Point Coords",[x,y,z])
 
                 ll = 10
                 color_image = cv2.line(color_image, (cent_x - ll, cent_y), (cent_x + ll, cent_y), crossColor, 2)
@@ -211,7 +207,21 @@ if __name__ == "__main__":
             key = cv2.waitKey(1)
             # if frame_count == 0:
             #     break
+            print(fail_count_per_frame," failed depth")
             frame_count += 1
+
+            # Add Open3d Visualisation
+            vis.add_geometry(source_pcd, reset_bounding_box = True)
+            for locs in tag_loc:
+                tag_dot = o3d.geometry.TriangleMesh.create_sphere(radius=0.02, create_uv_map = True)
+                tag_dot.translate(locs)
+                vis.add_geometry(tag_dot, reset_bounding_box = True)
+            
+            if not vis.poll_events():
+                break
+            vis.update_renderer()
+
+            vis.clear_geometries()
 
             # Remove background - Set pixels further than clipping_distance to grey
             grey_color = 153
@@ -229,8 +239,8 @@ if __name__ == "__main__":
 
             if key == 27:
                 cv2.destroyAllWindows()
-                # vis.close()
-                # vis.destroy_window()
+                vis.close()
+                vis.destroy_window()
                 break 
 
     finally:
