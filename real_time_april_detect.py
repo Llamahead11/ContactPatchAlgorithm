@@ -19,7 +19,7 @@ def get_profiles():
     ctx = rs.context()
     devices = ctx.query_devices()
 
-    color_profiles = []
+    color_profiles = [] 
     depth_profiles = []
     for device in devices:
         name = device.get_info(rs.camera_info.name)
