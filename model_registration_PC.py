@@ -4,6 +4,7 @@ import numpy as np
 import robotpy_apriltag
 import csv
 import pyrealsense2 as rs
+import matplotlib.pyplot as plt
 
 # Open marker CSV file
 sc_v =0.03468647377170447 #0.01934137612
@@ -418,3 +419,65 @@ with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm
 # print(scale_arr)
 
 # print(np.mean(np.array(scale_arr)))
+
+#=====================================================================================================================
+# Inner deformed to inner undeformed
+#=====================================================================================================================
+
+# Segment the model point cloud to contain that section of t2Cam point cloud
+# calculate bounding box of t2cam_pcd and crop model according to it
+t2cam_bounding_box = source_pcd.get_axis_aligned_bounding_box()
+cropped_model = pcd.crop(t2cam_bounding_box)
+
+app = o3d.visualization.gui.Application.instance
+app.initialize()
+o3dvis = o3d.visualization.O3DVisualizer()
+o3dvis.show_settings = True
+
+for t_l,t in zip(tag_loc,tags):
+    o3dvis.add_3d_label(pos=t_l, text = f'{t}')
+
+o3dvis.add_geometry("T2Cam",source_pcd)
+o3dvis.add_geometry("my points",cropped_model)
+o3dvis.add_geometry("tag normals", line_set)
+
+for mark,id in zip(m_points,correctTags):
+    o3dvis.add_3d_label(pos=mark, text = f'{id}')
+with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:        
+    '''visualize'''
+    o3dvis.reset_camera_to_default()
+    app.add_window(o3dvis)
+    app.run()
+
+# Calculate the distances between the source point cloud and target point cloud
+
+deformed_distances = cropped_model.compute_point_cloud_distance(source_pcd)
+deformed_distances = np.array(deformed_distances)
+num_bins = 20 
+plt.hist(deformed_distances, bins=num_bins, color='blue', alpha=0.7, edgecolor='black')
+plt.title("Histogram of Deformed Distances")
+plt.xlabel("Distance")
+plt.ylabel("Frequency")
+plt.show()
+
+print(np.max(deformed_distances), np.min(deformed_distances))
+
+grid = np.linspace(np.min(deformed_distances),np.max(deformed_distances),30)
+color_def = np.linspace(0.5,1,30)
+
+vis = o3d.visualization.Visualizer()
+vis.create_window()
+
+for idx,region in enumerate(grid[:-1]):
+    ind = np.where((deformed_distances > region) & (deformed_distances < grid[idx+1]))[0]
+    select_deformation = cropped_model.select_by_index(ind)
+    select_deformation.paint_uniform_color([color_def[idx], color_def[idx], 1-color_def[idx]])
+    vis.add_geometry(select_deformation)
+
+vis.run()
+vis.destroy_window()
+
+#OR
+
+#Raycasting
+
