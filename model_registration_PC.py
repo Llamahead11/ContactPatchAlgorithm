@@ -45,7 +45,7 @@ for n_m in numeric_markers:
 print(correctTags)
 
 # print("Load a ply point cloud, print it, and render it")
-pcd = o3d.io.read_point_cloud("../realsense/4_row_model_Model.ply")
+pcd = o3d.io.read_point_cloud("../realsense/4_row_model_Model.ply", print_progress = True)
 #pcd.scale(scale = 0.01934137612, center = [0,0,0])
 pcd.scale(scale = 0.03468647377170447, center = [0,0,0])
 #Estimate normals
@@ -426,7 +426,7 @@ with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm
 
 # Segment the model point cloud to contain that section of t2Cam point cloud
 # calculate bounding box of t2cam_pcd and crop model according to it
-t2cam_bounding_box = source_pcd.get_axis_aligned_bounding_box()
+t2cam_bounding_box = source_pcd.get_oriented_bounding_box() #.get_axis_aligned_bounding_box() 
 cropped_model = pcd.crop(t2cam_bounding_box)
 
 app = o3d.visualization.gui.Application.instance
@@ -451,8 +451,9 @@ with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm
 
 # Calculate the distances between the source point cloud and target point cloud
 
-deformed_distances = cropped_model.compute_point_cloud_distance(source_pcd)
+deformed_distances = source_pcd.compute_point_cloud_distance(cropped_model)
 deformed_distances = np.array(deformed_distances)
+print(deformed_distances)
 num_bins = 20 
 plt.hist(deformed_distances, bins=num_bins, color='blue', alpha=0.7, edgecolor='black')
 plt.title("Histogram of Deformed Distances")
@@ -462,22 +463,114 @@ plt.show()
 
 print(np.max(deformed_distances), np.min(deformed_distances))
 
-grid = np.linspace(np.min(deformed_distances),np.max(deformed_distances),30)
-color_def = np.linspace(0.5,1,30)
+d_dist = np.asarray(deformed_distances)
+d_colors = plt.get_cmap('plasma')((d_dist - d_dist.min()) / (d_dist.max() - d_dist.min()))
+d_colors = d_colors[:, :3]
 
-vis = o3d.visualization.Visualizer()
-vis.create_window()
+print(d_colors)
+print(np.size(d_colors))
+print(np.size(np.asarray(source_pcd.points)))
+t2_d_pcd = o3d.geometry.PointCloud()
+t2_d_pcd.points = source_pcd.points
+t2_d_pcd.colors = o3d.utility.Vector3dVector(d_colors)
 
-for idx,region in enumerate(grid[:-1]):
-    ind = np.where((deformed_distances > region) & (deformed_distances < grid[idx+1]))[0]
-    select_deformation = cropped_model.select_by_index(ind)
-    select_deformation.paint_uniform_color([color_def[idx], color_def[idx], 1-color_def[idx]])
-    vis.add_geometry(select_deformation)
+o3d.visualization.draw_geometries([t2_d_pcd])
 
-vis.run()
-vis.destroy_window()
+# vis = o3d.visualization.Visualizer()
+# vis.create_window()
+# vis.add_geometry(t2_d_pcd)
+
+# for idx,region in enumerate(grid[:-1]):
+#     ind = np.where((deformed_distances > region) & (deformed_distances < grid[idx+1]))[0]
+#     select_deformation = cropped_model.select_by_index(ind)
+#     select_deformation.paint_uniform_color([color_def[idx], color_def[idx], 1-color_def[idx]])
+#     vis.add_geometry(select_deformation)
+
+# vis.run()
+# vis.destroy_window()
 
 #OR
 
-#Raycasting
+# Raycasting
+# Shoot rays from the t2cam to undeformed, make undeformed a mesh and find point correspondences
+# Might shoot rays in both directions
+# Check that rays dont hit objects with the same id or just take out the starting ray mesh from the scene
 
+mesh_model = o3d.io.read_triangle_mesh("../realsense/4_row_model_Model.ply", print_progress = True)
+mesh_model.scale(scale = 0.03468647377170447, center = [0,0,0])
+cropped_mesh_model = mesh_model.crop(t2cam_bounding_box)
+print("Compute normals")
+cropped_mesh_model.compute_vertex_normals()
+print("Completed")
+
+# mesh_t2cam , densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+#         source_pcd, depth=9)
+
+#get normals and points from t2cam pointcloud
+p = np.asarray(source_pcd.points[::1])
+n = np.asarray(source_pcd.normals[::1])
+
+scene = o3d.t.geometry.RaycastingScene()
+#deformed_id = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh_t2cam))
+undeformed_id = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(cropped_mesh_model))
+print(undeformed_id)
+
+# Cast rays with offset
+offset_distance = 0.00001 # small offset value hereeeeeeeeeeeeeee
+ray_origins_offset = p + offset_distance * (-n)
+ray_data = np.hstack((ray_origins_offset, -n)) 
+
+ray_tensor = o3d.core.Tensor(ray_data, dtype=o3d.core.Dtype.Float32) 
+results = scene.cast_rays(ray_tensor)
+
+# draw normals
+normal_length = 0.01
+line_starts = p
+line_ends = p + (-n) * normal_length
+
+lines = [[i, i + len(p)] for i in range(len(p))]
+line_points = np.vstack((line_starts, line_ends))
+
+# visualization inverted normals
+line_set = o3d.geometry.LineSet()
+line_set.points = o3d.utility.Vector3dVector(line_points)
+line_set.lines = o3d.utility.Vector2iVector(lines)
+line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]] * len(lines))
+
+o3d.visualization.draw_geometries([cropped_mesh_model,line_set])
+
+# Raycast info
+hit = (results['t_hit'].isfinite()) & (results['geometry_ids']==0)
+#print(results)
+
+#print('Geometry hit',results['geometry_ids'].numpy())
+#print(results['t_hit'].numpy())
+dist_ray = ray_tensor[hit][:,3:]*results['t_hit'][hit].reshape((-1,1))
+poi = ray_tensor[hit][:,:3] + dist_ray
+poi1 = ray_tensor[hit][:,:3]
+
+#print(dist_ray.numpy())
+# Color according to distance
+densities = np.linalg.norm(dist_ray.numpy(),axis=1) ## here
+density_colors = plt.get_cmap('plasma')((densities - densities.min()) / (densities.max() - densities.min()))
+density_colors = density_colors[:, :3]
+
+print(density_colors)
+
+density_pcd = o3d.geometry.PointCloud()
+density_pcd.points = o3d.utility.Vector3dVector(poi1.numpy())
+density_pcd.colors = o3d.utility.Vector3dVector(density_colors)
+
+pcd_1 = o3d.t.geometry.PointCloud(poi)
+pcd_2 = o3d.t.geometry.PointCloud(poi1)
+
+rays_hit_start = ray_tensor[hit][:, :3].numpy()
+rays_hit_end = poi.numpy()
+
+lines = [[i, i + len(rays_hit_start)] for i in range(len(rays_hit_start))]
+line_points = np.vstack((rays_hit_start, rays_hit_end))
+ray_lines = o3d.geometry.LineSet()
+ray_lines.points = o3d.utility.Vector3dVector(line_points)
+ray_lines.lines = o3d.utility.Vector2iVector(lines)
+
+o3d.visualization.draw_geometries([density_pcd,ray_lines])

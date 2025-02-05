@@ -84,9 +84,9 @@ def save_intrinsic_as_json(filename, frame):
 
 if __name__ == "__main__":
 
-    path_output = "../realsense"  # ../ for parent directory, ./ for current directory
-    path_depth = "../realsense/depth"
-    path_color = "../realsense/color"
+    path_output = "../realsense2"  # ../ for parent directory, ./ for current directory
+    path_depth = "../realsense/depth_0_0"
+    path_color = "../realsense/color_0_0"
 
     make_clean_folder(path_output)
     make_clean_folder(path_depth)
