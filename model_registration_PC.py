@@ -7,11 +7,11 @@ import pyrealsense2 as rs
 import matplotlib.pyplot as plt
 
 # Open marker CSV file
-sc_v =0.03468647377170447 #0.01934137612
+sc_v = 0.019390745853434508 #0.03468647377170447 #0.01934137612
 markers = []
 numeric_markers = []
 m_points = []
-with open("../realsense/4_row_model_control_points.csv", 'r') as file:
+with open("../4_row_model/4_row_model_control_points.csv", 'r') as file:
     csv_reader = csv.reader(file)
     
     # Iterate through rows
@@ -36,18 +36,16 @@ with open("C://Users//amalp//Desktop//MSS732//projected//RCtoTag.csv", 'r') as f
         RCcorTag.append(row[0])
         normalTag.append(row[2])
 
-# Find and print the correct convention Apriltag IDs in my 3D inner tyre model 
 correctTags = []; 
 for n_m in numeric_markers:
     c_t = normalTag[int(n_m)-1]
-    #print(n_m,c_t)
     correctTags.append(c_t)
-print(correctTags)
+
 
 # print("Load a ply point cloud, print it, and render it")
-pcd = o3d.io.read_point_cloud("../realsense/4_row_model_Model.ply", print_progress = True)
-#pcd.scale(scale = 0.01934137612, center = [0,0,0])
-pcd.scale(scale = 0.03468647377170447, center = [0,0,0])
+pcd = o3d.io.read_point_cloud("../4_row_model/4_row_model_HighPoly_Smoothed.ply", print_progress = True)
+pcd.scale(scale = 0.019390745853434508, center = [0,0,0])
+#pcd.scale(scale = 0.03468647377170447, center = [0,0,0])
 #Estimate normals
 print("Estimating model normals")
 pcd.estimate_normals(
@@ -152,7 +150,9 @@ line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]] * len(lines))
 # T2Cam, T2Cam_colour = capture_point_cloud(pipeline)
 
 #===========================================================================================================
-image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
+#image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\realsense\color_0_0\000310.jpg')
+image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
+#image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
 #image = cv2.imread("./color/000001.jpg")
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -167,11 +167,16 @@ tag_loc = [] # List to store detected tag locations [x,y,z]
 outlineColor = (0, 255, 0)  # Color of tag outline
 crossColor = (0, 0, 255)  # Color of cross
 
-intrinsic = o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json")
+#intrinsic = o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json")
+intrinsic = o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json")
 #intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
-source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
-source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\depth\000646.png')
+#source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_0_0\000310.jpg')
+source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
+#source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
+#source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_0_0\000310.png')
+source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_3_18\000215.png')
+#source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\depth\000646.png')
 depth_scale = 0.1
 depth_image_scaled = np.asarray(source_depth) * depth_scale
 depth_image_scaled = o3d.geometry.Image(depth_image_scaled.astype(np.float32))
@@ -344,7 +349,7 @@ print("model: ", model_correspondence)
 
 p = t2cam_correspondence
 q = [model_correspondence[correctTags.index(tag)] for tag in str_tags]
-pq = np.asarray([[p[i], q[i]] for i in range(10)]) 
+pq = np.asarray([[p[i], q[i]] for i in range(len(p))]) 
 print(pq) 
 corres = o3d.utility.Vector2iVector(pq)
 estimator = o3d.pipelines.registration.TransformationEstimationPointToPoint()
@@ -387,7 +392,7 @@ with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm
 #     if ctag in str_tags:
 #         print(ctag,idx,m_points[idx])
 
-
+# FIX THIS INDICES NOT CORRECT< CORRESPOND TO OLD MODEL
 
 # d_t2cam_34_35 = np.linalg.norm(np.array(tag_loc[0]) - np.array(tag_loc[1]))
 # print("Distance between tag 34 and 35 on t2cam:", d_t2cam_34_35)
@@ -491,86 +496,86 @@ o3d.visualization.draw_geometries([t2_d_pcd])
 
 #OR
 
-# Raycasting
-# Shoot rays from the t2cam to undeformed, make undeformed a mesh and find point correspondences
-# Might shoot rays in both directions
-# Check that rays dont hit objects with the same id or just take out the starting ray mesh from the scene
+# # Raycasting
+# # Shoot rays from the t2cam to undeformed, make undeformed a mesh and find point correspondences
+# # Might shoot rays in both directions
+# # Check that rays dont hit objects with the same id or just take out the starting ray mesh from the scene
 
-mesh_model = o3d.io.read_triangle_mesh("../realsense/4_row_model_Model.ply", print_progress = True)
-mesh_model.scale(scale = 0.03468647377170447, center = [0,0,0])
-cropped_mesh_model = mesh_model.crop(t2cam_bounding_box)
-print("Compute normals")
-cropped_mesh_model.compute_vertex_normals()
-print("Completed")
+# mesh_model = o3d.io.read_triangle_mesh("../4_row_model/4_row_model_HighPoly_Smoothed.ply", print_progress = True)
+# mesh_model.scale(scale = 0.019390745853434508, center = [0,0,0])
+# cropped_mesh_model = mesh_model.crop(t2cam_bounding_box)
+# print("Compute normals")
+# cropped_mesh_model.compute_vertex_normals()
+# print("Completed")
 
-# mesh_t2cam , densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-#         source_pcd, depth=9)
+# # mesh_t2cam , densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+# #         source_pcd, depth=9)
 
-#get normals and points from t2cam pointcloud
-p = np.asarray(source_pcd.points[::1])
-n = np.asarray(source_pcd.normals[::1])
+# #get normals and points from t2cam pointcloud
+# p = np.asarray(source_pcd.points[::1])
+# n = np.asarray(source_pcd.normals[::1])
 
-scene = o3d.t.geometry.RaycastingScene()
-#deformed_id = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh_t2cam))
-undeformed_id = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(cropped_mesh_model))
-print(undeformed_id)
+# scene = o3d.t.geometry.RaycastingScene()
+# #deformed_id = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh_t2cam))
+# undeformed_id = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(cropped_mesh_model))
+# print(undeformed_id)
 
-# Cast rays with offset
-offset_distance = 0.00001 # small offset value hereeeeeeeeeeeeeee
-ray_origins_offset = p + offset_distance * (-n)
-ray_data = np.hstack((ray_origins_offset, -n)) 
+# # Cast rays with offset
+# offset_distance = 0.00001 # small offset value hereeeeeeeeeeeeeee
+# ray_origins_offset = p + offset_distance * (-n)
+# ray_data = np.hstack((ray_origins_offset, -n)) 
 
-ray_tensor = o3d.core.Tensor(ray_data, dtype=o3d.core.Dtype.Float32) 
-results = scene.cast_rays(ray_tensor)
+# ray_tensor = o3d.core.Tensor(ray_data, dtype=o3d.core.Dtype.Float32) 
+# results = scene.cast_rays(ray_tensor)
 
-# draw normals
-normal_length = 0.01
-line_starts = p
-line_ends = p + (-n) * normal_length
+# # draw normals
+# normal_length = 0.01
+# line_starts = p
+# line_ends = p + (-n) * normal_length
 
-lines = [[i, i + len(p)] for i in range(len(p))]
-line_points = np.vstack((line_starts, line_ends))
+# lines = [[i, i + len(p)] for i in range(len(p))]
+# line_points = np.vstack((line_starts, line_ends))
 
-# visualization inverted normals
-line_set = o3d.geometry.LineSet()
-line_set.points = o3d.utility.Vector3dVector(line_points)
-line_set.lines = o3d.utility.Vector2iVector(lines)
-line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]] * len(lines))
+# # visualization inverted normals
+# line_set = o3d.geometry.LineSet()
+# line_set.points = o3d.utility.Vector3dVector(line_points)
+# line_set.lines = o3d.utility.Vector2iVector(lines)
+# line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]] * len(lines))
 
-o3d.visualization.draw_geometries([cropped_mesh_model,line_set])
+# o3d.visualization.draw_geometries([cropped_mesh_model,line_set])
 
-# Raycast info
-hit = (results['t_hit'].isfinite()) & (results['geometry_ids']==0)
-#print(results)
+# # Raycast info
+# hit = (results['t_hit'].isfinite()) & (results['geometry_ids']==0)
+# #print(results)
 
-#print('Geometry hit',results['geometry_ids'].numpy())
-#print(results['t_hit'].numpy())
-dist_ray = ray_tensor[hit][:,3:]*results['t_hit'][hit].reshape((-1,1))
-poi = ray_tensor[hit][:,:3] + dist_ray
-poi1 = ray_tensor[hit][:,:3]
+# #print('Geometry hit',results['geometry_ids'].numpy())
+# #print(results['t_hit'].numpy())
+# dist_ray = ray_tensor[hit][:,3:]*results['t_hit'][hit].reshape((-1,1))
+# poi = ray_tensor[hit][:,:3] + dist_ray
+# poi1 = ray_tensor[hit][:,:3]
 
-#print(dist_ray.numpy())
-# Color according to distance
-densities = np.linalg.norm(dist_ray.numpy(),axis=1) ## here
-density_colors = plt.get_cmap('plasma')((densities - densities.min()) / (densities.max() - densities.min()))
-density_colors = density_colors[:, :3]
+# #print(dist_ray.numpy())
+# # Color according to distance
+# densities = np.linalg.norm(dist_ray.numpy(),axis=1) ## here
+# density_colors = plt.get_cmap('plasma')((densities - densities.min()) / (densities.max() - densities.min()))
+# density_colors = density_colors[:, :3]
 
-print(density_colors)
+# print(density_colors)
 
-density_pcd = o3d.geometry.PointCloud()
-density_pcd.points = o3d.utility.Vector3dVector(poi1.numpy())
-density_pcd.colors = o3d.utility.Vector3dVector(density_colors)
+# density_pcd = o3d.geometry.PointCloud()
+# density_pcd.points = o3d.utility.Vector3dVector(poi1.numpy())
+# density_pcd.colors = o3d.utility.Vector3dVector(density_colors)
 
-pcd_1 = o3d.t.geometry.PointCloud(poi)
-pcd_2 = o3d.t.geometry.PointCloud(poi1)
+# pcd_1 = o3d.t.geometry.PointCloud(poi)
+# pcd_2 = o3d.t.geometry.PointCloud(poi1)
 
-rays_hit_start = ray_tensor[hit][:, :3].numpy()
-rays_hit_end = poi.numpy()
+# rays_hit_start = ray_tensor[hit][:, :3].numpy()
+# rays_hit_end = poi.numpy()
 
-lines = [[i, i + len(rays_hit_start)] for i in range(len(rays_hit_start))]
-line_points = np.vstack((rays_hit_start, rays_hit_end))
-ray_lines = o3d.geometry.LineSet()
-ray_lines.points = o3d.utility.Vector3dVector(line_points)
-ray_lines.lines = o3d.utility.Vector2iVector(lines)
+# lines = [[i, i + len(rays_hit_start)] for i in range(len(rays_hit_start))]
+# line_points = np.vstack((rays_hit_start, rays_hit_end))
+# ray_lines = o3d.geometry.LineSet()
+# ray_lines.points = o3d.utility.Vector3dVector(line_points)
+# ray_lines.lines = o3d.utility.Vector2iVector(lines)
 
-o3d.visualization.draw_geometries([density_pcd,ray_lines])
+# o3d.visualization.draw_geometries([density_pcd,ray_lines])
