@@ -84,9 +84,9 @@ def save_intrinsic_as_json(filename, frame):
 
 if __name__ == "__main__":
 
-    path_output = "../realsense2"  # ../ for parent directory, ./ for current directory
-    path_depth = "../realsense/depth_0_0"
-    path_color = "../realsense/color_0_0"
+    path_output = "../beaded_full_bottom"  # ../ for parent directory, ./ for current directory
+    path_depth = "../beaded_full_bottom/depth"
+    path_color = "../beaded_full_bottom/color"  
 
     make_clean_folder(path_output)
     make_clean_folder(path_depth)
@@ -104,10 +104,10 @@ if __name__ == "__main__":
     # note: using 640 x 480 depth resolution produces smooth depth boundaries
     #       using rs.format.bgr8 for color image format for OpenCV based image visualization
     print('Using the default profiles: \n  color:{}, depth:{}'.format(
-        color_profiles[0], depth_profiles[0]))
-    w, h, fps, fmt = depth_profiles[3]
+        color_profiles[2], depth_profiles[2]))
+    w, h, fps, fmt = depth_profiles[2] #6
     config.enable_stream(rs.stream.depth, w, h, fmt, fps)
-    w, h, fps, fmt = color_profiles[18]
+    w, h, fps, fmt = color_profiles[2] #21
     config.enable_stream(rs.stream.color, w, h, fmt, fps)
 
 
@@ -117,8 +117,9 @@ if __name__ == "__main__":
 
     # Using preset HighAccuracy for recording
     depth_sensor.set_option(rs.option.visual_preset, Preset.HighAccuracy)
-    depth_sensor.set_option(rs.option.exposure,21000)
-    depth_sensor.set_option(rs.option.gain, 16)
+    depth_sensor.set_option(rs.option.exposure,6000)
+    depth_sensor.set_option(rs.option.gain, 48)
+    # depth_sensor.set_option(rs.option.depth_units,0.001)
     # Getting the depth sensor's depth scale (see rs-align example for explanation)
     depth_scale = depth_sensor.get_depth_scale()
     print("Depth Scale",depth_scale)
@@ -159,10 +160,10 @@ if __name__ == "__main__":
 
             if frame_count == 0:
                 save_intrinsic_as_json(
-                    "../realsense/camera_intrinsic.json",
+                    "../realsense2/camera_intrinsic.json",
                     color_frame)
-            cv2.imwrite("%s/%06d.png" % \
-                    (path_depth, frame_count), depth_image)
+            # cv2.imwrite("%s/%06d.png" % \
+            #         (path_depth, frame_count), depth_image)
             cv2.imwrite("%s/%06d.jpg" % \
                     (path_color, frame_count), color_image)
             print("Saved color + depth image %06d" % frame_count)
@@ -178,7 +179,7 @@ if __name__ == "__main__":
             # Render images
             depth_colormap = cv2.applyColorMap(
                 cv2.convertScaleAbs(depth_image, alpha=0.09), cv2.COLORMAP_JET)
-            images = np.hstack((bg_removed, depth_colormap))
+            images = np.hstack((color_image, depth_colormap))
             cv2.namedWindow('Recorder Realsense', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('Recorder Realsense', 1000,400)
             cv2.imshow('Recorder Realsense', images)

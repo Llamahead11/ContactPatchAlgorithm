@@ -60,6 +60,7 @@ class RealSenseManager:
         Returns depth and color image as NumPy array
         """
         frames = self.pipeline.wait_for_frames()
+        time_ms = frames.get_timestamp()
         aligned_frames = self.align.process(frames)
 
         aligned_depth_frame = aligned_frames.get_depth_frame()
@@ -96,7 +97,7 @@ class RealSenseManager:
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image,intrinsic)
         pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
-        return depth_image, color_image, rgbd_image, pcd
+        return time_ms, depth_image, color_image, rgbd_image, pcd
         
     def stop(self):
         self.pipeline.stop()

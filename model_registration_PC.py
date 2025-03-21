@@ -7,11 +7,12 @@ import pyrealsense2 as rs
 import matplotlib.pyplot as plt
 
 # Open marker CSV file
-sc_v = 0.019390745853434508 #0.03468647377170447 #0.01934137612
+sc_v = 1#0.0378047581618546#0.019390745853434508 #0.03468647377170447 #0.01934137612
 markers = []
 numeric_markers = []
 m_points = []
-with open("../4_row_model/4_row_model_control_points.csv", 'r') as file:
+#"../4_row_model/4_row_model_control_points.csv"
+with open("./ContactPatchAlgorithm/full_outer.csv", 'r') as file:
     csv_reader = csv.reader(file)
     
     # Iterate through rows
@@ -43,8 +44,10 @@ for n_m in numeric_markers:
 
 
 # print("Load a ply point cloud, print it, and render it")
-pcd = o3d.io.read_point_cloud("../4_row_model/4_row_model_HighPoly_Smoothed.ply", print_progress = True)
-pcd.scale(scale = 0.019390745853434508, center = [0,0,0])
+#"../4_row_model/4_row_model_HighPoly_Smoothed.ply"
+pcd = o3d.io.read_point_cloud("./ContactPatchAlgorithm/full_outer_inner_part_only.ply", print_progress = True)
+#pcd.scale(scale = 0.0378047581618546, center = [0,0,0])
+#pcd.scale(scale = 0.019390745853434508, center = [0,0,0])
 #pcd.scale(scale = 0.03468647377170447, center = [0,0,0])
 #Estimate normals
 print("Estimating model normals")
@@ -172,10 +175,12 @@ intrinsic = o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.jso
 #intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
 #source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_0_0\000310.jpg')
-source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
+#source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
+source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense2\color\000110.jpg')
 #source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
 #source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_0_0\000310.png')
-source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_3_18\000215.png')
+#source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_3_18\000215.png')
+source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense2\depth\000110.png')
 #source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\depth\000646.png')
 depth_scale = 0.1
 depth_image_scaled = np.asarray(source_depth) * depth_scale
@@ -326,22 +331,25 @@ with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm
 # Registration and scaling
 str_tags = [str(e) for e in tags]
 
-# # Scaling model (not efficient)
-# model_idx_corres = np.array([[idx,int(ctag)] for idx,ctag in enumerate(correctTags) if ctag in str_tags])
-# sorted_idx_corres = model_idx_corres[model_idx_corres[:, 1].argsort()][:,0]
-# print(sorted_idx_corres)
+# Scaling model (not efficient)
+model_idx_corres = np.array([[idx,int(ctag)] for idx,ctag in enumerate(correctTags) if ctag in str_tags])
+sorted_idx_corres = model_idx_corres[model_idx_corres[:, 1].argsort()][:,0]
+print(sorted_idx_corres)
 
-# scale_arr = []
-# for tag_idx,idx in enumerate(sorted_idx_corres[:-1]):
-#     d_t2cam_id_curr_next = np.linalg.norm(np.array(tag_loc[tag_idx]) - np.array(tag_loc[tag_idx+1]))
-#     d_model_id_curr_next = np.linalg.norm(np.array(m_points[idx]) - np.array(m_points[sorted_idx_corres[tag_idx+1]]))
-#     scale = d_t2cam_id_curr_next/d_model_id_curr_next
-#     print(tag_idx,idx,d_t2cam_id_curr_next,d_model_id_curr_next)
-#     scale_arr.append(scale)
+scale_arr = []
+for tag_idx,idx in enumerate(sorted_idx_corres[:-1]):
+    d_t2cam_id_curr_next = np.linalg.norm(np.array(tag_loc[tag_idx]) - np.array(tag_loc[tag_idx+1]))
+    d_model_id_curr_next = np.linalg.norm(np.array(m_points[idx]) - np.array(m_points[sorted_idx_corres[tag_idx+1]]))
+    scale = d_t2cam_id_curr_next/d_model_id_curr_next
+    print(tag_idx,idx,d_t2cam_id_curr_next,d_model_id_curr_next)
+    scale_arr.append(scale)
 
-# scale = np.mean(scale_arr)
-# pcd.scale(scale = scale, center = [0,0,0])
-# m_points = scale*np.array(m_points)
+scale = np.mean(scale_arr)
+print("SCALE ++++++++++++++++++++++++++++")
+print(scale)
+print(scale_arr)
+pcd.scale(scale = scale, center = [0,0,0])
+m_points = scale*np.array(m_points)
 
 # define 3d transformation from T2Cam coordinate system to 3D model coordinate system
 print("t2cam: ", t2cam_correspondence)

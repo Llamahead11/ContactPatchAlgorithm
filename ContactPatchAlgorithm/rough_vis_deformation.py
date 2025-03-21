@@ -1,15 +1,20 @@
 import cv2
 import open3d as o3d
 import numpy as np
-import robotpy_apriltag
 import csv
-import pyrealsense2 as rs
+# import matplotlib
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from capture_realsense import RealSenseManager
 from replay_realsense import read_RGB_D_folder
+from SIFT_Detect import siftDetect
+from Farneback_Detect import farnebackDetect
+from LK_Dense import lkDense
 from app_vis import Viewer3D
+import vidVisualiser as vV
 import time
 
+plt.ioff() 
 
 def load_rc_control_points(file_path="./4_row_model_control_points.csv",scale_factor=0.019390745853434508):
     """
@@ -116,6 +121,25 @@ def load_model_pcd(file_path="./4_row_model/4_row_model_HighPoly_Smoothed.ply", 
     # print("Completed")
     return pcd
 
+def load_model_ply(file_path="./4_row_model/4_row_model_HighPoly_Smoothed.ply", scale = 0.019390745853434508):
+    '''
+    Load Inner Tyre Model Point Cloud and Estimate Normals
+
+    Args:
+        file_path (str): Path to the CSV file containing control points.
+        scale (float): Scaling factor for the control point coordinates.
+    
+    Returns:
+        pcd (o3d.geometry.PointCloud): Inner Tyre Model Point Cloud
+    '''
+    mesh = o3d.io.read_triangle_mesh(filename=file_path, print_progress = True)
+    mesh.scale(scale = scale, center = [0,0,0])
+    # print("Estimating model normals")
+    # pcd.estimate_normals(
+    #     search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=10))
+    # print("Completed")
+    return mesh
+
 def find_tag_point_ID_correspondence(pcd,m_points):
     """
     Find point and normal at the center of each identified marker
@@ -134,7 +158,7 @@ def find_tag_point_ID_correspondence(pcd,m_points):
     tag_norm = []
     model_correspondence = []
     for tag in range(0,len(m_points)):
-        [k, idx, _] = pcd_tree.search_knn_vector_3d(m_points[tag],500)
+        [k, idx, _] = pcd_tree.search_knn_vector_3d(m_points[tag],1)
         model_correspondence.append(idx[0])
         np.asarray(pcd.colors)[idx[1:], :] = [0, 0, 1]
         m_norm = np.asarray(pcd.normals)[idx[1:], :]
@@ -237,13 +261,13 @@ def register_t2cam_with_model(t2cam_pcd,model_pcd,corres_vector):
     T = estimator.compute_transformation(t2cam_pcd,model_pcd,corres_vector)
     t2cam_pcd.transform(T)
     
-def draw_registration_result(source, target, transformation):
+def draw_registration_result(source, target, transformation,frame):
     source_temp = source
     target_temp = target
     source_temp.paint_uniform_color([1, 0.706, 0])
     target_temp.paint_uniform_color([0, 0.651, 0.929])
-    source_temp.transform(transformation)
-    o3d.visualization.draw_geometries([source_temp, target_temp])
+    #source_temp.transform(transformation)
+    o3d.visualization.draw_geometries([source_temp, target_temp,frame])
 
 def segment_pcd_using_bounding_box(t2cam_pcd,model_pcd):
     """
@@ -259,8 +283,21 @@ def segment_pcd_using_bounding_box(t2cam_pcd,model_pcd):
     """
     t2cam_bounding_box = t2cam_pcd.get_oriented_bounding_box() #.get_axis_aligned_bounding_box() 
     cropped_model = model_pcd.crop(t2cam_bounding_box)
-    downsampled_t2cam = t2cam_pcd.uniform_down_sample(every_k_points=100)
-    downsampled_cropped_model = cropped_model.uniform_down_sample(every_k_points=100)
+    return cropped_model
+
+def ICP_register_T2Cam_with_model(cropped_model,t2cam_pcd,draw_reg):
+    downsampled_t2cam = t2cam_pcd.uniform_down_sample(every_k_points=10)
+    downsampled_points = np.asarray(downsampled_t2cam.points)
+    mid_xyz = (np.ptp(downsampled_points,axis=0)/2 + np.min(downsampled_points,axis=0))
+    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(origin = mid_xyz,size = 0.1)
+    mask = ((downsampled_points[:,0]-mid_xyz[0])**2+(downsampled_points[:,1]-mid_xyz[1])**2+((downsampled_points[:,2]-mid_xyz[2])/1.2)**2) > 0.1**2
+    print(mid_xyz)
+    downsampled_points_removed_def = downsampled_points[mask]
+    print(np.size(downsampled_points))
+    print(np.size(downsampled_points_removed_def))
+    downsampled_t2cam_removed_def = o3d.geometry.PointCloud()
+    downsampled_t2cam_removed_def.points = o3d.utility.Vector3dVector(downsampled_points_removed_def) 
+    downsampled_cropped_model = cropped_model.uniform_down_sample(every_k_points=10)
     # print("Initial alignment")
     # evaluation = o3d.pipelines.registration.evaluate_registration(
     #             t2cam_pcd, cropped_model, 0.02)
@@ -269,17 +306,19 @@ def segment_pcd_using_bounding_box(t2cam_pcd,model_pcd):
     # reg_p2p = o3d.pipelines.registration.registration_icp(t2cam_pcd, cropped_model, max_correspondence_distance = 0.00002, 
     #                                                       estimation_method = o3d.pipelines.registration.TransformationEstimationPointToPoint(),
     #                                                       criteria = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=100))
-    reg_p2p = o3d.pipelines.registration.registration_icp(downsampled_t2cam, downsampled_cropped_model, max_correspondence_distance = 0.02, init = np.eye(4),
+    reg_p2p = o3d.pipelines.registration.registration_icp(downsampled_t2cam_removed_def, downsampled_cropped_model, max_correspondence_distance = 0.02, init = np.eye(4),
                                                           estimation_method = o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-                                                          criteria = o3d.pipelines.registration.ICPConvergenceCriteria(relative_rmse=1.000000e-08,max_iteration=200))
+                                                          criteria = o3d.pipelines.registration.ICPConvergenceCriteria(relative_rmse=1.000000e-08,max_iteration=1000))
     print(reg_p2p)
     print("Transformation is:")
     print(reg_p2p.transformation)
+    if draw_reg: draw_registration_result(cropped_model, t2cam_pcd, reg_p2p.transformation,frame)
     t2cam_pcd.transform(reg_p2p.transformation)
-    #draw_registration_result(t2cam_pcd, cropped_model, reg_p2p.transformation)
-    return cropped_model
+    #if draw_reg: draw_registration_result(downsampled_t2cam_removed_def, downsampled_t2cam, reg_p2p.transformation,frame)
+    if draw_reg: draw_registration_result(cropped_model, t2cam_pcd, reg_p2p.transformation,frame)
 
-def inner_deformed_to_inner_undeformed(t2cam_pcd,model_pcd):
+
+def inner_deformed_to_inner_undeformed(count,t2cam_pcd,model_pcd,model_ply,draw_reg):
     """
     Function to get the SIGNED corressponding distances between 
     the T2Cam Point Cloud and the Inner Tyre Model
@@ -292,8 +331,19 @@ def inner_deformed_to_inner_undeformed(t2cam_pcd,model_pcd):
         t2_d_pcd (o3d.geometry.PointCloud): Returns the T2Cam point Cloud with a colormap applied representing deformed distances
     """
     cropped_model_pcd = segment_pcd_using_bounding_box(t2cam_pcd,model_pcd)
-    d_dist = np.asarray(t2cam_pcd.compute_point_cloud_distance(cropped_model_pcd))
-    
+    ICP_register_T2Cam_with_model(cropped_model_pcd,t2cam_pcd,draw_reg)
+    #cropped_model_ply = segment_pcd_using_bounding_box(t2cam_pcd,model_ply)
+
+
+    downsampled_t2cam = t2cam_pcd.uniform_down_sample(every_k_points=10)
+    downsampled_cropped_model = cropped_model_pcd.uniform_down_sample(every_k_points=10)
+    #d_dist = np.asarray(t2cam_pcd.compute_point_cloud_distance(downsampled_cropped_model))
+    d_dist = np.asarray(downsampled_cropped_model.compute_point_cloud_distance(t2cam_pcd))
+    t2cam_pcd.estimate_normals()
+    normals_deformed = np.asarray(t2cam_pcd.normals)
+    normals_undeformed = np.asarray(downsampled_cropped_model.normals)
+    dot_product = np.sign(np.sum(normals_deformed * normals_undeformed, axis=1))
+    d_dist = dot_product*d_dist
     # num_bins = 20
     # plt.hist(d_dist, bins=num_bins, color='blue', alpha=0.7, edgecolor='black')
     # plt.title("Histogram of Deformed Distances")
@@ -301,15 +351,23 @@ def inner_deformed_to_inner_undeformed(t2cam_pcd,model_pcd):
     # plt.ylabel("Frequency")
     # plt.show()
 
-    print(np.max(d_dist), np.min(d_dist))
-
+    # print(np.max(d_dist), np.min(d_dist))
+    # print(np.size(d_dist))
+    # print(np.size(np.asarray(cropped_model_pcd.points)))
+    # print(np.size(np.asarray(t2cam_pcd.points)))
+    
     d_colors = plt.get_cmap('plasma')((d_dist - d_dist.min()) / (d_dist.max() - d_dist.min()))
     d_colors = d_colors[:, :3]
 
     t2_d_pcd = o3d.geometry.PointCloud()
-    t2_d_pcd.points = t2cam_pcd.points
+    t2_d_pcd.points = downsampled_cropped_model.points
     t2_d_pcd.colors = o3d.utility.Vector3dVector(d_colors)
-    return t2_d_pcd
+    #o3d.visualization.draw_geometries([t2_d_pcd])
+    #figInner = vV.makeOrthoDeformationPlot(label = 'Inner', points=np.asarray(t2_d_pcd.points), dist = d_dist,vmin=-0.003,vmax=0.003)
+    figInner = vV.createOuterDeformationPlot(label = 'Inner', points=np.asarray(t2_d_pcd.points), dist = d_dist,vmin=-0.01,vmax=0.01)
+    plt.savefig("./Inner_Deformation/{}.png".format(count))
+    #plt.show()
+    return t2_d_pcd, np.max(d_dist), downsampled_cropped_model, d_dist
 
 def run_vis_app(t2cam_pcd,cropped_model_pcd):
     app = o3d.visualization.gui.Application.instance
@@ -325,24 +383,136 @@ def run_vis_app(t2cam_pcd,cropped_model_pcd):
         o3dvis.reset_camera_to_default()
         app.add_window(o3dvis)
         app.run()
+
+def test_contact_patch(correctTags,tag_norm,m_points,contact_Ids):
+    points = []
+    normals = []
+    print(correctTags)
+    for contact_id in contact_Ids:
+        print(contact_id)
+        idx = np.where(np.array(correctTags) == np.array(contact_id))[0][0]
+        print(idx)
+        points.append(m_points[idx])
+        normals.append(tag_norm[idx].tolist())
+    print(points,normals)
+    line_set = draw_lines(np.array(points),np.array(normals))
+    return line_set
+
+def orb_detect(color_image):
+    orb = cv2.SIFT_create()
+    kp = orb.detect(color_image,None)
+    kp, des = orb.compute(color_image, None)
+    des_color = cv2.drawKeypoints(color_image,kp,None, color = (0,255,0), flags = 0)
+    plt.imshow(des_color), plt.show()
+
+def calculate_apriltag_deformation(prev_tag_locs,curr_tag_locs):
+    device = o3d.core.Device("CPU:0")
+    dtype = o3d.core.float32
+    prev_pcd = o3d.t.geometry.PointCloud(device)
+    prev_pcd.point.positions = o3d.core.Tensor(prev_tag_locs, dtype, device)
+    curr_pcd = o3d.t.geometry.PointCloud(device)
+    curr_pcd.point.positions = o3d.core.Tensor(curr_tag_locs, dtype, device)
+    o3d.visualization.draw_geometries([prev_pcd.to_legacy(),curr_pcd.to_legacy()])
+
+def find_points(prev_3D_points, curr_3D_points, prev_t2cam_pcd, curr_t2cam_pcd):
+    t2 = time.time()
+    prev_kdtree = o3d.geometry.KDTreeFlann(prev_t2cam_pcd)
+    curr_kdtree = o3d.geometry.KDTreeFlann(curr_t2cam_pcd)
+
+    # Find closest indices for SIFT feature points
+    prev_indices = np.array([prev_kdtree.search_knn_vector_3d(xyz, 1)[1][0] for xyz in prev_3D_points], dtype=np.int32)
+    curr_indices = np.array([curr_kdtree.search_knn_vector_3d(xyz, 1)[1][0] for xyz in curr_3D_points], dtype=np.int32)    
+
+    t3 = time.time()
+    print("find SIFT point IDS",t3-t2)
+    return prev_indices,curr_indices
+
+# def compare_and_align_consecutive_pcd(prev_t2cam_pcd,curr_t2cam_pcd, draw_reg):
+#     downsampled_prev_t2cam = prev_t2cam_pcd.uniform_down_sample(every_k_points=10)
+#     downsampled_curr_t2cam = curr_t2cam_pcd.uniform_down_sample(every_k_points=10)
+#     # print("Initial alignment")
+#     # evaluation = o3d.pipelines.registration.evaluate_registration(
+#     #             t2cam_pcd, cropped_model, 0.02)
+#     # print(evaluation)
+#     print("Apply point-to-plane ICP")
+#     # reg_p2p = o3d.pipelines.registration.registration_icp(t2cam_pcd, cropped_model, max_correspondence_distance = 0.00002, 
+#     #                                                       estimation_method = o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+#     #                                                       criteria = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=100))
+#     reg_p2p = o3d.pipelines.registration.registration_icp(downsampled_prev_t2cam, downsampled_curr_t2cam, max_correspondence_distance = 0.02, init = np.eye(4),
+#                                                           estimation_method = o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+#                                                           criteria = o3d.pipelines.registration.ICPConvergenceCriteria(relative_rmse=1.000000e-12,max_iteration=2000))
+#     print(reg_p2p)
+#     print("Transformation is:")
+#     print(reg_p2p.transformation)
+#     curr_t2cam_pcd.transform(reg_p2p.transformation)
+#     if draw_reg: draw_registration_result(prev_t2cam_pcd, curr_t2cam_pcd, reg_p2p.transformation)
+
+def load_outer_inner_corres():
+    with open('inner_to_outer_correspondences.npy', 'rb') as f:
+        rays_hit_start = np.load(f)
+        rays_hit_end = np.load(f)
+    return rays_hit_start, rays_hit_end
+
+def projectOuter(count,kdtree,rays_hit_start,rays_hit_end,cropped_model_pcd,d_dist,normals,t2_d_pcd):
+    t0 = time.time()
+    cropped_points = np.asarray(cropped_model_pcd.points)
+    # normals = np.asarray(cropped_model_pcd.points)
+    idx = np.array([kdtree.search_knn_vector_3d(xyz, 1)[1][0] for xyz in cropped_points], dtype=np.int32)
+    # print(idx)
+    # print(d_dist)
+    # print(np.size(d_dist))
+    # model_s = o3d.t.geometry.PointCloud()
+    # model_s.point.positions = rays_hit_start
+    model_outer_deformed = o3d.geometry.PointCloud()
+    model_outer_deformed.points = o3d.utility.Vector3dVector(rays_hit_end[idx] + d_dist[:, None] * normals[idx])
+    #model_outer_deformed.point.positions = rays_hit_end[idx] + d_dist[:, None] * normals[idx]
+    model_outer_undeformed = o3d.geometry.PointCloud()
+    model_outer_undeformed.points = o3d.utility.Vector3dVector(rays_hit_end[idx])
+    #model_outer_undeformed.point.positions = rays_hit_end[idx]
     
+    d_outer_dist = np.asarray(model_outer_undeformed.compute_point_cloud_distance(model_outer_deformed))
+    d_colors_outer = plt.get_cmap('plasma')((d_outer_dist - d_outer_dist.min()) / (d_outer_dist.max() - d_outer_dist.min()))
+    d_colors_outer = d_colors_outer[:, :3]
+
+    t2_d_pcd_outer = o3d.geometry.PointCloud()
+    t2_d_pcd_outer.points = model_outer_deformed.points
+    t2_d_pcd_outer.colors = o3d.utility.Vector3dVector(d_colors_outer)
+
+    t1 = time.time()
+    print(t1-t0)
+    #o3d.visualization.draw_geometries([model_outer_deformed,model_outer_undeformed])
+    #o3d.visualization.draw_geometries([t2_d_pcd_outer, t2_d_pcd])
+    #figOuter = vV.makeOrthoDeformationPlot(label = 'Outer', points=np.asarray(t2_d_pcd_outer.points), dist = d_outer_dist,vmin=-0.003,vmax=0.003)
+    figOuter = vV.createOuterDeformationPlot(label = 'Outer', points=np.asarray(t2_d_pcd_outer.points), dist = d_outer_dist,vmin=-0.01,vmax=0.01)
+    plt.savefig("./Outer_Deformation/{}.png".format(count))
+    #plt.show()
+
+    return t2_d_pcd_outer, np.max(d_outer_dist), cropped_model_pcd, d_outer_dist
+
 def main():
     start_time = time.time()
     """Main function to excute the script"""
     Real_Time = False
     Run_on_Jetson = False
     debug_mode = False
-    start_index = 100
+    view_video = False
+    draw_reg = False
+    start_index = 150#100
     depth_profile = 3
-    scale = 0.019390745853434508
+    #scale = 0.019390745853434508
+    scale = 0.03912#0.03805#0.0378047581618546 #0.0376047581618546
 
-    file_path_control_points = './4_row_model_control_points.csv'
+    #file_path_control_points = './4_row_model_control_points.csv'
+    file_path_control_points = './full_outer.csv'
     markers, m_points, numeric_markers = load_rc_control_points(file_path_control_points,scale)
     normalTag, RCcorTag = convert_rc_apriltag_hex_ids()
     correctTags = convert_rc_control_points(normalTag,numeric_markers)
 
-    file_path_model = '4_row_model_HighPoly_Smoothed.ply'
+    #file_path_model = '4_row_model_HighPoly_Smoothed.ply'
+    file_path_model = 'full_outer_inner_part_only.ply'
     model_pcd = load_model_pcd(file_path_model,scale)
+    model_ply = load_model_ply(file_path_model,scale)
+    normals_model_pcd = np.asarray(model_pcd.normals)
 
     tag_norm, model_correspondence = find_tag_point_ID_correspondence(model_pcd, m_points)
     tag_normals_line_set = draw_lines(m_points, tag_norm)
@@ -352,7 +522,7 @@ def main():
     if Real_Time:
         rsManager = RealSenseManager(depth_profile=depth_profile,color_profile=18,exposure=1000,gain=248,enable_spatial=False,enable_temporal=False)
     else:
-        imageStream = read_RGB_D_folder(r'C:\Users\amalp\Desktop\MSS732\realsense',starting_index=start_index,depth_num=3,debug_mode=debug_mode)
+        imageStream = read_RGB_D_folder(r'C:\Users\amalp\Desktop\MSS732\realsense2',starting_index=start_index,depth_num=3,debug_mode=debug_mode)
 
     if Run_on_Jetson:
         from april_detect_jetson import DetectAprilTagsJetson
@@ -361,20 +531,48 @@ def main():
         from april_detect_windows import DetectAprilTagsWindows
         detector = DetectAprilTagsWindows(depth_profile=depth_profile,debug_mode=debug_mode)
 
-    viewer3d = Viewer3D("Distance Deformation")
+    contact_line_set = test_contact_patch(correctTags,tag_norm,m_points,['0','49'])
+    if view_video: viewer3d = Viewer3D("Distance Deformation")
+
+    sift = siftDetect(depth_profile,debug_mode)
+    farne = farnebackDetect(depth_profile,debug_mode)
+    lkdense = lkDense(depth_profile,debug_mode)
+
+    rays_hit_start, rays_hit_end = load_outer_inner_corres()
+    rays_pcd = o3d.geometry.PointCloud()
+    rays_pcd.points = o3d.utility.Vector3dVector(rays_hit_start)
+    kdtree = o3d.geometry.KDTreeFlann(rays_pcd)
+
     load_time = time.time() - start_time
     print("Loading Completed in",load_time)
+    
+    prev_img = None
+    prev_rgbd_img = None
+    prev_tag_locations = None
+    prev_flag = False
+    idno = 0
     try:
         while True:
             start_loop_time = time.time()
             if Real_Time:
                 depth_image, color_image, rgbd_image, t2cam_pcd = rsManager.get_frames()
             elif imageStream.has_next():
-                depth_image, color_image, rgbd_image, t2cam_pcd = imageStream.get_next_frame()
+                count, depth_image, color_image, rgbd_image, t2cam_pcd = imageStream.get_next_frame()
             else:
                 break
             
-            # vis_window(t2cam_pcd)
+            #vis_window(t2cam_pcd)
+            # test= o3d.geometry.PointCloud()
+            # test.points = t2cam_pcd.points[0:100000]
+            
+            # t1 = time.time()
+            # t2cam_pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=30))
+            # t2 = time.time()
+            # print("estimate nomrals", t2-t1)
+            # t2cam_pcd.orient_normals_consistent_tangent_plane(k=2)
+            # t3 = time.time()
+            # print("orient consistent",t3-t2)
+            #o3d.visualization.draw_geometries([t2cam_pcd],point_show_normal=True)
             detector.input_frame(color_image)
             tag_IDs, tag_locations = detector.process_3D_locations(rgbd_image)
             
@@ -402,21 +600,43 @@ def main():
             print("Registration in", register_time)
             #vis_window(t2cam_pcd,model_pcd)
 
-            t2cam_dist_pcd = inner_deformed_to_inner_undeformed(t2cam_pcd,model_pcd)
-            time_at_c2c = time.time()
-            c2c_dist_time = time_at_c2c - time_at_registration
-            print("C2C distance calculated in", c2c_dist_time)
-            
-            #o3d.visualization.draw_geometries([t2cam_dist_pcd])
+            t2_d_pcd_inner, max_inner_def, cropped_model_pcd, d_inner_dist = inner_deformed_to_inner_undeformed(count,t2cam_pcd,model_pcd,model_ply,draw_reg)
+            time_at_Inner_c2c = time.time()
+            c2c_dist_time = time_at_Inner_c2c - time_at_registration
+            print("Inner C2C distance calculated in", c2c_dist_time)
 
-            viewer3d.update_cloud(t2cam_dist_pcd)
-            viewer3d.tick()
+            t2_d_pcd_outer, max_outer_def, cropped_model_pcd, d_outer_dist = projectOuter(count,kdtree,rays_hit_start,rays_hit_end,cropped_model_pcd,d_inner_dist,normals_model_pcd,t2_d_pcd_inner)
+            time_at_Outer_c2c = time.time()
+            c2c_dist_time = time_at_Outer_c2c - time_at_Inner_c2c
+            print("Outer C2C distance calculated in", c2c_dist_time)
+            #o3d.visualization.draw_geometries([t2cam_dist_pcd])
+            if view_video:
+                viewer3d.update_cloud(t2_d_pcd_inner,t2_d_pcd_outer)
+                viewer3d.tick()
             time_at_app_view = time.time()
-            app_view_time = time_at_app_view - time_at_c2c
+            app_view_time = time_at_app_view - time_at_Outer_c2c
             print("Time to update viewer", app_view_time)
             #time.sleep(0.1)
 
-            
+            #if prev_flag == True: 
+                #o3d.visualization.draw_geometries([prev_t2cam_pcd,t2cam_pcd])
+                #compare_and_align_consecutive_pcd(prev_t2cam_pcd,t2cam_pcd,True)
+                #prev_3D_points, curr_3D_points = sift.detect(prev_img,color_image,prev_rgbd_img,rgbd_image, max_def, t2cam_pcd)
+                #prev_3D_points, curr_3D_points = surf.detect(prev_img,color_image,prev_rgbd_img,rgbd_image, max_def, t2cam_pcd)
+                #prev_3D_points, curr_3D_points = farne.detect(prev_img, color_image, prev_rgbd_img, rgbd_image, max_def)
+                #prev_3D_points, curr_3D_points = lkdense.detect(prev_img, color_image, prev_rgbd_img, rgbd_image, max_def)
+                #calculate_apriltag_deformation(prev_tag_locations,tag_locations)
+
+                #prev_idx,curr_idx = find_points(prev_3D_points,curr_3D_points,prev_t2cam_pcd,t2cam_pcd)
+
+            prev_img = color_image
+            prev_rgbd_img = rgbd_image
+            prev_t2cam_pcd = t2cam_pcd
+            prev_tag_locations = tag_locations
+            prev_flag = True
+            key = cv2.waitKey(5)
+            if key == ord('q'):
+                break
 
             if debug_mode:
                 key = cv2.waitKey(1)
@@ -438,10 +658,13 @@ def main():
                 print("===========================================")
                 if key == 27:
                     cv2.destroyAllWindows()
+                    if view_video: viewer3d.stop()
                     break
+            print("Time for one frame:",time.time() - start_loop_time)
 
     finally:
         if Real_Time: rsManager.stop()
+        #if view_video: viewer3d.stop()
 
 
 if __name__ == "__main__":
