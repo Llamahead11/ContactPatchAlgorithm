@@ -339,11 +339,11 @@ def inner_deformed_to_inner_undeformed(count,t2cam_pcd,model_pcd,model_ply,draw_
     downsampled_cropped_model = cropped_model_pcd.uniform_down_sample(every_k_points=10)
     #d_dist = np.asarray(t2cam_pcd.compute_point_cloud_distance(downsampled_cropped_model))
     d_dist = np.asarray(downsampled_cropped_model.compute_point_cloud_distance(t2cam_pcd))
-    t2cam_pcd.estimate_normals()
-    normals_deformed = np.asarray(t2cam_pcd.normals)
-    normals_undeformed = np.asarray(downsampled_cropped_model.normals)
-    dot_product = np.sign(np.sum(normals_deformed * normals_undeformed, axis=1))
-    d_dist = dot_product*d_dist
+    # t2cam_pcd.estimate_normals()
+    # normals_deformed = np.asarray(t2cam_pcd.normals)
+    # normals_undeformed = np.asarray(downsampled_cropped_model.normals)
+    # dot_product = np.sign(np.sum(normals_deformed * normals_undeformed, axis=1))
+    # d_dist = dot_product*d_dist
     # num_bins = 20
     # plt.hist(d_dist, bins=num_bins, color='blue', alpha=0.7, edgecolor='black')
     # plt.title("Histogram of Deformed Distances")
@@ -522,7 +522,7 @@ def main():
     if Real_Time:
         rsManager = RealSenseManager(depth_profile=depth_profile,color_profile=18,exposure=1000,gain=248,enable_spatial=False,enable_temporal=False)
     else:
-        imageStream = read_RGB_D_folder(r'C:\Users\amalp\Desktop\MSS732\realsense2',starting_index=start_index,depth_num=3,debug_mode=debug_mode)
+        imageStream = read_RGB_D_folder('realsense2',starting_index=start_index,depth_num=3,debug_mode=debug_mode)
 
     if Run_on_Jetson:
         from april_detect_jetson import DetectAprilTagsJetson

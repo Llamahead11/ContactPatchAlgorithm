@@ -6,8 +6,8 @@ import os
 class read_RGB_D_folder:
     def __init__(self, folder, starting_index=0,depth_num=3,debug_mode=True):
         self.folder = folder
-        self.depth_folder = os.path.join(folder, "depth")
-        self.color_folder = os.path.join(folder, "color")
+        self.depth_folder = os.path.join(os.path.dirname(__file__),folder, "depth")
+        self.color_folder = os.path.join(os.path.dirname(__file__),folder, "color")
         self.depth_num = depth_num
         self.index = starting_index
         self.debug_mode = debug_mode
