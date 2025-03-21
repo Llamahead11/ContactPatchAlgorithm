@@ -6,15 +6,15 @@ import math
 ##########################
 # Parameters
 aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)  # AprilTag dictionary
-tag_size_mm = 12  # Tag size in millimeters 14.4
-tags_per_row = 11  # Number of tags in one row 11
-tags_per_column = 16 # Number of tags in one column 16
-margin_mm = 6  # Margin between tags in millimeters 4
+tag_size_mm = 120  # Tag size in millimeters 14.4 #12
+tags_per_row = 1  # Number of tags in one row 11
+tags_per_column = 2 # Number of tags in one column 16
+margin_mm = 13.75*2  # Margin between tags in millimeters 4
 dpi = 300  # Resolution for printing (dots per inch)
 page_width_mm = 210  # Width of an A4 page in millimeters
 page_height_mm = 297  # Height of an A4 page in millimeters
-start_id = 0  # Starting tag ID
-end_id = 586  # Last tag ID (total tags = end_id - start_id + 1)
+start_id = 350  # Starting tag ID 0
+end_id = 351  # Last tag ID (total tags = end_id - start_id + 1) 586
 
 # Conversions
 mm_to_pixels = dpi / 25.4
@@ -62,7 +62,7 @@ while current_id <= end_id:
             current_id += 1
 
     # Save the page as an image
-    output_filename = f"apriltags_page_test_{page_number}.png"
+    output_filename = f"apriltags_scale_{page_number}.png"
     cv2.imwrite(output_filename, page)
     print(f"Saved: {output_filename}")
     page_number += 1

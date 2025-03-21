@@ -6,6 +6,7 @@ import open3d as o3d
 class Viewer3D(object):
     def __init__(self, title):
         self.CLOUD_NAME = 'T2Cam_Deformation'
+        self.LINE_NAME = 'Contact Patch Tag 0 and 49'
         self.first_cloud = True
         app = o3d.visualization.gui.Application.instance
         app.initialize()
@@ -24,10 +25,11 @@ class Viewer3D(object):
             self.main_vis.post_redraw()
         return tick_return
 
-    def update_cloud(self, geometries):
+    def update_cloud(self, geometries,lines):
         if self.first_cloud:
             def add_first_cloud():
                 self.main_vis.add_geometry(self.CLOUD_NAME, geometries)
+                self.main_vis.add_geometry(self.LINE_NAME, lines)
                 self.main_vis.reset_camera_to_default()
                 self.main_vis.setup_camera(60,
                                            [0.07, 0.07, 0],
@@ -36,13 +38,19 @@ class Viewer3D(object):
 
             add_first_cloud()
             self.main_vis.remove_geometry(self.CLOUD_NAME)
+            self.main_vis.remove_geometry(self.LINE_NAME)
             self.first_cloud = False
         else:
             def update_with_cloud():
                 self.main_vis.remove_geometry(self.CLOUD_NAME)
+                self.main_vis.remove_geometry(self.LINE_NAME)
                 self.main_vis.add_geometry(self.CLOUD_NAME, geometries)
-
+                self.main_vis.add_geometry(self.LINE_NAME, lines)
+                
             update_with_cloud()
+
+    def stop(self):
+        self.main_vis.stop()
 
 
 # viewer3d = Viewer3D("mytitle")

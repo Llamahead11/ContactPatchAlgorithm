@@ -177,7 +177,7 @@ if __name__ == "__main__":
             
             #Render images
             depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image,alpha=0.09), cv2.COLORMAP_JET)
-            images = np.hstack((bg_removed,depth_colormap))
+            images = np.hstack((color_image,depth_colormap))
             cv2.namedWindow('AprilTag Detection', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('AprilTag Detection', 1000, 400)
             cv2.imshow('AprilTag Detection', images)
