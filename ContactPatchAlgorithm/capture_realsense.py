@@ -54,13 +54,22 @@ class RealSenseManager:
 
         align_to = rs.stream.color
         self.align = rs.align(align_to)
+        self.count = -1
+        self.prev_time = 0
 
     def get_frames(self):
         """
         Returns depth and color image as NumPy array
         """
+        self.count+=1
         frames = self.pipeline.wait_for_frames()
-        time_ms = frames.get_timestamp()
+        time_global = frames.get_timestamp()
+        if self.count == 0:
+            time_ms = 0
+        else:
+            time_ms = time_global - self.prev_time
+        self.prev_time = time_global
+        
         aligned_frames = self.align.process(frames)
 
         aligned_depth_frame = aligned_frames.get_depth_frame()
@@ -96,8 +105,7 @@ class RealSenseManager:
 
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image,intrinsic)
         pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
-
-        return time_ms, depth_image, color_image, rgbd_image, pcd
+        return time_ms, self.count, depth_image, color_image, rgbd_image, pcd
         
     def stop(self):
         self.pipeline.stop()

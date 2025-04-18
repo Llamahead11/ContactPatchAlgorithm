@@ -49,6 +49,8 @@ class siftDetect:
         pts1 = np.asarray(pts1)
         pts2 = np.asarray(pts2)
 
+        end_time = time.time()
+
         if self.debug_mode:
             draw_params = dict(matchColor = (0,255,0),
                         singlePointColor = (255,0,0),
@@ -135,7 +137,7 @@ class siftDetect:
 
         vmin, vmax = -0.003, 0.003 # only show values with +/-5mm of deformation
 
-        end_time = time.time()
+        
         vV.plotAndSavePlt(local_point_displacements,prev_3D_points,vmin,vmax)
 
         # Show the figure in a non-blocking way

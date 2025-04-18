@@ -8,7 +8,8 @@ from rough_vis_deformation import load_rc_control_points, convert_rc_apriltag_he
 #model_inner_pcd = o3d.io.read_point_cloud("full_outer_inner_part_only.ply")
 model_inner_ply = o3d.t.io.read_triangle_mesh("full_outer_inner_part_only.ply")
 #model_outer_pcd = o3d.io.read_point_cloud("full_outer_outer_part_only.ply")
-model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_outer_part_only.ply")
+#model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_outer_part_only.ply")
+model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_treads_part_only.ply")
 
 model_detailed_inner = o3d.io.read_point_cloud("4_row_model_HighPoly_Smoothed.ply")
 scale_new = 0.03912#0.03805#0.0378047581618546 #0.0376047581618546 
@@ -46,7 +47,7 @@ model_detailed_inner.scale(scale = scale_old, center = [0,0,0])
 
 # o3d.visualization.draw_geometries([model_inner_pcd,model_detailed_inner,model_outer_pcd])
 
-model_outer_pcd = o3d.t.io.read_point_cloud("full_outer_outer_part_only.ply")
+model_outer_pcd = o3d.t.io.read_point_cloud("full_outer_treads_part_only.ply")
 model_inner_pcd = o3d.t.io.read_point_cloud("full_outer_inner_part_only.ply")
 model_detailed_inner = o3d.t.io.read_point_cloud("4_row_model_HighPoly_Smoothed.ply")
 model_outer_pcd.scale(scale = scale_new, center = [0,0,0])
@@ -78,7 +79,8 @@ ray_data = np.hstack((ray_origins_offset, normals))
 ray_tensor = o3d.core.Tensor(ray_data, dtype=o3d.core.Dtype.Float32) 
 results = scene.cast_rays(ray_tensor)
 
-hit = ((results['t_hit'].isfinite()) & (results['geometry_ids']==0)) & (results['t_hit'] < 0.1)
+#hit = ((results['t_hit'].isfinite()) & (results['geometry_ids']==0)) & (results['t_hit'] < 0.1)
+hit =  (results['geometry_ids']==0) & (results['t_hit'] < 0.1)
 #print(results)
 
 #print('Geometry hit',results['geometry_ids'].numpy())
@@ -100,7 +102,7 @@ ray_lines.lines = o3d.utility.Vector2iVector(lines)
 
 o3d.visualization.draw_geometries([pcd.to_legacy(),pcd1.to_legacy()])
 
-with open('inner_to_outer_correspondences.npy', 'wb') as f:
+with open('inner_to_treads_correspondences.npy', 'wb') as f:
     np.save(f, rays_hit_start)
     np.save(f, rays_hit_end)
 

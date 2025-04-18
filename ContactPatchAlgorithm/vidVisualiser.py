@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
-# import matplotlib
-# matplotlib.use('Agg')
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import open3d
 import os
+import cProfile
 
 plt.ioff() 
 
@@ -67,6 +68,28 @@ def createOuterDeformationPlot(label, points, dist, vmin=-0.003, vmax=0.003):
     ax_hist.set_xticks(np.linspace(0,np.max(hist),2))
     ax_hist.set_yticks(np.linspace(vmin, vmax, num=7))
     ax_hist.set_ylim(vmin, vmax)
+    return fig, sc
+
+def updateScatterPlot(sc, points, dist, vmin=-0.003, vmax=0.003):
+    # Update the data for the scatter plot
+    sc._offsets3d = (points[:, 2], -points[:, 0], points[:, 1])
+    sc.set_array(dist)  # Update the color data
+    sc.set_clim(vmin, vmax)  # Update the color limits
+    
+    # Redraw the plot
+    plt.draw()
+
+def visContactEdge(label, points,vmin,vmax,dist):
+    fig = plt.figure(figsize=(6,6))
+    ax = fig.add_subplot(111, projection='3d')
+    sc = ax.scatter(points[:, 2], -points[:, 0], points[:, 1], c=dist, cmap='plasma', s=2,vmin=vmin, vmax=vmax)
+    ax.set_title("{} Contact Patch Edge".format(label))
+    ax.azim = 90
+    ax.elev = 70
+    plt.ylim(-0.3,0.3)
+    plt.xlim(0,0.3)
+    ax.set_zlim(0,0.4)
+    ax.set_box_aspect([ub - lb for lb, ub in (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
     return fig
 
 # def createDeformationPlot(ax,fig,label, points, dist,vmin,vmax,azim,elev):
@@ -186,7 +209,8 @@ def saveImages():
     pass
 
 def makeVidfromImage(image_folder):
-    video_name = 'Outer_Deformation_updated_ICP_downsampled.avi'
+    #video_name = 'Inner_Deformation_updated_ICP_downsampled.avi'
+    video_name = 'Outer_def_plane_max_100.avi'
 
     images = [img for img in os.listdir(image_folder) if img.endswith((".jpg", ".jpeg", ".png"))]
     #print("Images:", images)

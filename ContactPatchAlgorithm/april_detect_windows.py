@@ -72,7 +72,7 @@ class DetectAprilTagsWindows():
                     self.crossColor,
                     2
                 )
-        
+        print(self.tag_IDs)
         return self.tag_IDs, self.tag_locations
 
 

@@ -11,7 +11,6 @@ from enum import IntEnum
 # import sys
 # sys.path.append(abspath(__file__))
 
-
 class Preset(IntEnum):
     Custom = 0
     Default = 1
@@ -56,12 +55,13 @@ def make_clean_folder(path_folder):
     if not exists(path_folder):
         makedirs(path_folder)
     else:
-        user_input = input("%s not empty. Overwrite? (y/n) : " % path_folder)
-        if user_input.lower() == 'y':
-            shutil.rmtree(path_folder)
-            makedirs(path_folder)
-        else:
-            exit()
+        # user_input = input("%s not empty. Overwrite? (y/n) : " % path_folder)
+        # if user_input.lower() == 'y':
+        #     shutil.rmtree(path_folder)
+        #     makedirs(path_folder)
+        # else:
+        #     exit()
+        exit()
 
 
 def save_intrinsic_as_json(filename, frame):
@@ -81,12 +81,17 @@ def save_intrinsic_as_json(filename, frame):
             outfile,
             indent=4)
 
+def save_time(filename,time):
+    with open(filename, 'wb') as f:
+        np.save(f, time)
 
 if __name__ == "__main__":
-
-    path_output = "../beaded_full_bottom"  # ../ for parent directory, ./ for current directory
-    path_depth = "../beaded_full_bottom/depth"
-    path_color = "../beaded_full_bottom/color"  
+    depth_num = 0
+    color_num = 0
+    data_path = "../DATA"
+    path_output = join(data_path,"test_eg_horizontal_10mm_disp_no_slip_d{}_c{}".format(depth_num,color_num))  # ../ for parent directory, ./ for current directory
+    path_depth = join(path_output,"depth")
+    path_color = join(path_output,"color")  
 
     make_clean_folder(path_output)
     make_clean_folder(path_depth)
@@ -104,12 +109,11 @@ if __name__ == "__main__":
     # note: using 640 x 480 depth resolution produces smooth depth boundaries
     #       using rs.format.bgr8 for color image format for OpenCV based image visualization
     print('Using the default profiles: \n  color:{}, depth:{}'.format(
-        color_profiles[2], depth_profiles[2]))
-    w, h, fps, fmt = depth_profiles[2] #6
+        color_profiles[color_num], depth_profiles[depth_num]))
+    w, h, fps, fmt = depth_profiles[depth_num] #6
     config.enable_stream(rs.stream.depth, w, h, fmt, fps)
-    w, h, fps, fmt = color_profiles[2] #21
+    w, h, fps, fmt = color_profiles[color_num] #21
     config.enable_stream(rs.stream.color, w, h, fmt, fps)
-
 
     # Start streaming
     profile = pipeline.start(config)
@@ -137,11 +141,18 @@ if __name__ == "__main__":
 
     # Streaming loop
     frame_count = 0
+    prev_time = 0
+    time = []
     try:
         while True:
             # Get frameset of color and depth
             frames = pipeline.wait_for_frames()
-
+            time_ms = frames.get_timestamp()
+            if len(time) == 0:
+                time.append(prev_time)
+            else:
+                time.append(time_ms - prev_time)
+            prev_time = time_ms
             # Align the depth frame to color frame
             aligned_frames = align.process(frames)
 
@@ -160,10 +171,11 @@ if __name__ == "__main__":
 
             if frame_count == 0:
                 save_intrinsic_as_json(
-                    "../realsense2/camera_intrinsic.json",
+                    join(path_output,"camera_intrinsic.json"),
                     color_frame)
-            # cv2.imwrite("%s/%06d.png" % \
-            #         (path_depth, frame_count), depth_image)
+                
+            cv2.imwrite("%s/%06d.png" % \
+                    (path_depth, frame_count), depth_image)
             cv2.imwrite("%s/%06d.jpg" % \
                     (path_color, frame_count), color_image)
             print("Saved color + depth image %06d" % frame_count)
@@ -184,10 +196,12 @@ if __name__ == "__main__":
             cv2.resizeWindow('Recorder Realsense', 1000,400)
             cv2.imshow('Recorder Realsense', images)
             
-
             # if 'esc' button pressed, escape loop and exit program
             if key == 27:
                 cv2.destroyAllWindows()
+                save_time(join(path_output,'time.npy'),time)
+                print(np.array(time))
+                print("SAVED SUCCESSFULLY")
                 break
 
     finally:

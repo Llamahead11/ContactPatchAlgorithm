@@ -7,7 +7,7 @@ import pyrealsense2 as rs
 import matplotlib.pyplot as plt
 
 # Open marker CSV file
-sc_v = 1#0.0378047581618546#0.019390745853434508 #0.03468647377170447 #0.01934137612
+sc_v = 0.0378047581618546#0.019390745853434508 #0.03468647377170447 #0.01934137612
 markers = []
 numeric_markers = []
 m_points = []
@@ -46,7 +46,7 @@ for n_m in numeric_markers:
 # print("Load a ply point cloud, print it, and render it")
 #"../4_row_model/4_row_model_HighPoly_Smoothed.ply"
 pcd = o3d.io.read_point_cloud("./ContactPatchAlgorithm/full_outer_inner_part_only.ply", print_progress = True)
-#pcd.scale(scale = 0.0378047581618546, center = [0,0,0])
+pcd.scale(scale = 0.0378047581618546, center = [0,0,0])
 #pcd.scale(scale = 0.019390745853434508, center = [0,0,0])
 #pcd.scale(scale = 0.03468647377170447, center = [0,0,0])
 #Estimate normals
@@ -154,8 +154,9 @@ line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]] * len(lines))
 
 #===========================================================================================================
 #image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\realsense\color_0_0\000310.jpg')
-image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
-#image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
+#image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
+#image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\realsense2\color\000110.jpg')
+image = cv2.imread(r'C:\Users\amalp\Desktop\MSS732\4_row_model\mid_in\color\000103.jpg')
 #image = cv2.imread("./color/000001.jpg")
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -170,23 +171,23 @@ tag_loc = [] # List to store detected tag locations [x,y,z]
 outlineColor = (0, 255, 0)  # Color of tag outline
 crossColor = (0, 0, 255)  # Color of cross
 
-#intrinsic = o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json")
-intrinsic = o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json")
+intrinsic = o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json")
+#intrinsic = o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json")
 #intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
 
 #source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_0_0\000310.jpg')
 #source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\color_3_18\000215.jpg')
-source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense2\color\000110.jpg')
-#source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\color\000646.jpg')
+#source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense2\color\000110.jpg')
+source_color = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\4_row_model\mid_in\color\000103.jpg')
 #source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_0_0\000310.png')
 #source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense\depth_3_18\000215.png')
-source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense2\depth\000110.png')
-#source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\projected\middle_in\depth\000646.png')
-depth_scale = 0.1
-depth_image_scaled = np.asarray(source_depth) * depth_scale
-depth_image_scaled = o3d.geometry.Image(depth_image_scaled.astype(np.float32))
+#source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\realsense2\depth\000110.png')
+source_depth = o3d.io.read_image(r'C:\Users\amalp\Desktop\MSS732\4_row_model\mid_in\depth\000103.png')
+depth_scale = 10000
+#depth_image_scaled = np.asarray(source_depth) * depth_scale
+#depth_image_scaled = o3d.geometry.Image(depth_image_scaled.astype(np.float32))
 source_rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
-            source_color, depth_image_scaled,depth_trunc = 5.0)
+            source_color, source_depth,depth_scale,depth_trunc = 5.0)
 source_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
             source_rgbd_image, intrinsic)
 source_pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
