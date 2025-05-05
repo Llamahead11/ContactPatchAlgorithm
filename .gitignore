@@ -1,0 +1,99 @@
+# Bytecode and cache
+__pycache__/
+TensorContactPatchAlgorithm/__pycache__/
+ContactPatchAlgorithm/__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+env/
+
+# Pip environment file
+pip-log.txt
+
+# Python distribution/packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+ContactPatchAlgorithm/rough_vis_deformation.build/
+ContactPatchAlgorithm/rough_vis_deformation.dist/
+ContactPatchAlgorithm/rough_vis_deformation.onefile-build/
+
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# Log files
+*.log
+
+# Photos (in a folder named 'photos')
+TensorContactPatchAlgorithm/Farne_video/
+TensorContactPatchAlgorithm/Inner_Deformation/
+TensorContactPatchAlgorithm/Outer_Deformation/
+TensorContactPatchAlgorithm/realsense2/
+TensorContactPatchAlgorithm/SIFT_video/
+TensorContactPatchAlgorithm/test1/
+
+ContactPatchAlgorithm/Farne_video/
+ContactPatchAlgorithm/Farne_video - Copy/
+ContactPatchAlgorithm/Inner_Deformation/
+ContactPatchAlgorithm/Outer_Deformation/
+ContactPatchAlgorithm/realsense2/
+ContactPatchAlgorithm/SIFT_video/
+ContactPatchAlgorithm/LKD_video/
+ContactPatchAlgorithm/test1/
+
+
+# Ignore point cloud and 3D mesh files
+*.pcd
+*.ply
+
+# Ignore DLPack or intermediate tensor/binary files
+*.bin
+*.npz
+
+# Ignore test output, temporary debug files
+*.tmp
+*.bak
+*.swp
+
+# Ignore Windows shortcuts or executables
+*.lnk
+*.exe
+
+#vids
+.avi
