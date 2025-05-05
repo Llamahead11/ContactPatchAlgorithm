@@ -438,11 +438,11 @@ def inner_deformed_to_inner_undeformed(count,t2cam_pcd,model_pcd,model_ply,draw_
     
     ## Save Figure 
     t__0 = time.perf_counter()
-    figInner,sc = vV.createOuterDeformationPlot(label = 'Inner', points=np.asarray(t2_d_pcd.points), dist = d_dist,vmin=-0.01,vmax=0.01)
-    plt.savefig("./Inner_Deformation/{}.png".format(count))
+    #figInner,sc = vV.createOuterDeformationPlot(label = 'Inner', points=np.asarray(t2_d_pcd.points), dist = d_dist,vmin=-0.01,vmax=0.01)
+    #plt.savefig("./Inner_Deformation/{}.png".format(count))
     #plt.show()
     #save_quickly(figInner, "fast_image.png")
-    plt.close(figInner)
+    #plt.close(figInner)
     #o3d.io.write_point_cloud("./Inner_Deformation/{}.pcd".format(count), t2_d_pcd)
     t__1 = time.perf_counter()
     print("Figure saving time: ",t__1-t__0)
@@ -601,11 +601,11 @@ def projectOuter(count,kdtree,rays_hit_start_io,rays_hit_end_io,cropped_model_pc
     
     #Save Fig
     t__0 = time.perf_counter()
-    figOuter,sc = vV.createOuterDeformationPlot(label = 'Outer', points=np.asarray(t2_d_pcd_outer.points), dist = d_outer_dist,vmin=-0.01,vmax=0.01)
+    #figOuter,sc = vV.createOuterDeformationPlot(label = 'Outer', points=np.asarray(t2_d_pcd_outer.points), dist = d_outer_dist,vmin=-0.01,vmax=0.01)
     #vV.updateScatterPlot(sc, np.asarray(t2_d_pcd_outer.points), d_outer_dist)
-    plt.savefig("./Outer_Deformation/{}.png".format(count))
+    #plt.savefig("./Outer_Deformation/{}.png".format(count))
     #plt.show()
-    plt.close(figOuter)
+    #plt.close(figOuter)
     t__1 = time.perf_counter()
     print("Figure saving time: ",t__1-t__0)
 
@@ -780,7 +780,7 @@ def main():
                 print("IMAGE NUMBER:",count)
             elif imageStream.has_next():
                 count, depth_image, color_image, rgbd_image, t2cam_pcd = imageStream.get_next_frame()
-                time_ms = time_arr[count]
+                time_ms = time_arr[count-150]
                 print("IMAGE NUMBER:",count)
             else:
                 break
@@ -856,7 +856,7 @@ def main():
                 #o3d.visualization.draw_geometries([prev_t2cam_pcd,t2cam_pcd])
                 #prev_3D_points, curr_3D_points = sift.detect(prev_img,color_image,prev_rgbd_img,rgbd_image, max_inner_def, t2cam_pcd)
             
-            prev_3D_points, curr_3D_points = farne.detect(color_image, prev_rgbd_img, rgbd_image, 0.03)
+            #prev_3D_points, curr_3D_points = farne.detect(color_image, prev_rgbd_img, rgbd_image, 0.03)
                 #prev_3D_points, curr_3D_points = lkdense.detect(prev_img, color_image, prev_rgbd_img, rgbd_image, max_inner_def)
                 #vis_apriltag_motion(prev_tag_locations,tag_locations)
 

@@ -13,15 +13,17 @@ class read_RGB_D_folder:
         self.debug_mode = debug_mode
         self.depth_files = [os.path.join(self.depth_folder, f) for f in os.listdir(self.depth_folder) if f.endswith(".png")]
         self.color_files = [os.path.join(self.color_folder, f) for f in os.listdir(self.color_folder) if f.endswith(".jpg")]
+        self.device = o3d.core.Device("CUDA:0")
+        self.dtype = o3d.core.float32
 
     def has_next(self):
         return self.index < len(self.color_files)
     
     def get_next_frame(self):
         if self.debug_mode: print(self.index, self.depth_files[self.index],self.color_files[self.index])
-
-        current_depth = np.array(o3d.io.read_image(self.depth_files[self.index]))
-        current_color = np.array(o3d.io.read_image(self.color_files[self.index]))
+        
+        current_depth = np.asarray(o3d.io.read_image(self.depth_files[self.index]))
+        current_color = np.asarray(o3d.io.read_image(self.color_files[self.index]))
         self.index += 1
         depth_scale = 1/0.0001#9.999999747378752e-05#1 0.1
         # depth_image_scaled = current_depth * 0.1

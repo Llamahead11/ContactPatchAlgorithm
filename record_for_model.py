@@ -164,8 +164,8 @@ if __name__ == "__main__":
             if not aligned_depth_frame or not color_frame:
                 continue
 
-            depth_image = np.asanyarray(aligned_depth_frame.get_data())
-            color_image = np.asanyarray(color_frame.get_data())
+            depth_image = np.asanyarray(aligned_depth_frame.get_data()).astype(np.float32)
+            color_image = np.asanyarray(color_frame.get_data()).astype(np.float32)
             key = cv2.waitKey(1)
             #and key == ord('p')
 

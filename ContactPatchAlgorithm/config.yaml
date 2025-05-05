@@ -1,11 +1,11 @@
 # GENERAL SPECIFICATIONS
-Real_Time: True
+Real_Time: False
 Run_on_Jetson: False
 
 #DEBUG
 debug_mode: False
 view_video: False
-draw_reg: True
+draw_reg: False
 
 #MODEL SPECIFICATIONS
 scale: 0.03757452 #0.03912 #0.03805#0.0378047581618546 #0.0376047581618546  #scale = 0.019390745853434508
@@ -17,8 +17,8 @@ inner_to_treads: 'inner_to_treads_correspondences.npy'
 
 #IMAGE_STREAM
 RGB_D_folder: 'realsense2' #'../../DATA/test_eg_horizontal_10mm_disp_no_slip_d0_c0' # 'realsense2'
-image_depth_profile: 0 #3
-image_color_profile: 0 #18
+image_depth_profile: 3 #3
+image_color_profile: 18 #18
 start_index: 150 #150 #100
 
 #CAMERA SETTINGS
