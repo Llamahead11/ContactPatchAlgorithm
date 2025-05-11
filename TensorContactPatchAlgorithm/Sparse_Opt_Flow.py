@@ -58,7 +58,8 @@ class SparseOptFlow:
         self.gpu_flow_x = cv2.cuda.GpuMat(self.gpu_next_p.size(), cv2.CV_32FC1)
         self.gpu_flow_y = cv2.cuda.GpuMat(self.gpu_next_p.size(), cv2.CV_32FC1)
 
-        
+        self.cp_traj_motion_3D = cp.empty((self.height,self.width,3,5), dtype=np.float32)
+
         self.traj_motion_3D_1 = cv2.cuda.GpuMat(self.gpu_prev_p.size(),type= cv2.CV_32FC3)
         self.traj_motion_3D_2 = cv2.cuda.GpuMat(self.gpu_prev_p.size(),type= cv2.CV_32FC3)
         self.traj_motion_3D_3 = cv2.cuda.GpuMat(self.gpu_prev_p.size(),type= cv2.CV_32FC3)

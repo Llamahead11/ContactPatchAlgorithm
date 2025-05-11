@@ -17,6 +17,7 @@ import yaml
 from scipy.spatial import cKDTree
 import os
 import cupy as cp
+import sys
 
 plt.ioff() 
 
@@ -827,10 +828,10 @@ def main():
     ## Initialise PREV frame
     #==========================================================================================================================================================================
     if Real_Time:
-        time_ms, count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda, vertex_map_np, vertex_map_gpu, normal_map_np, normal_map_gpu,mesh = rsManager.get_frames()
+        time_ms, count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_gpu, normal_map_gpu = rsManager.get_frames()
         print("IMAGE NUMBER:",count, time_ms)
     elif imageStream.has_next():
-        count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda, vertex_map_np, vertex_map_gpu, normal_map_np, normal_map_gpu,mesh = imageStream.get_next_frame()
+        count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_gpu, normal_map_gpu = imageStream.get_next_frame()
         #time_ms = time_arr[count-150]
         print("IMAGE NUMBER:",count)#, time_ms)
     
@@ -838,17 +839,25 @@ def main():
 
 
     #INITIALISE FRAME and GRAY
-    prev_img = (color_image*255).astype(np.uint8)
-    prev_t2cam_pcd = t2cam_pcd
+    #prev_img = (color_image*255).astype(np.uint8)
+    # prev_t2cam_pcd = t2cam_pcd
     prev_t2cam_pcd_cuda = t2cam_pcd_cuda
 
     gpu_curr = cv2.cuda.GpuMat()
     gpu_curr_gray = cv2.cuda.GpuMat()
+    
+    # gpu_prev = cv2.cuda.GpuMat()
+    # gpu_prev.upload(prev_img)
+    dl_color = color_image.as_tensor().to_dlpack()
+    cp_color = cp.from_dlpack(dl_color)
+    color_ptr = cp_color.data.ptr
 
-    gpu_prev = cv2.cuda.GpuMat()
-    gpu_prev.upload(prev_img)
+    gpu_prev = cv2.cuda.createGpuMatFromCudaMemory(rows = 480, cols = 848, type=cv2.CV_32FC3, cudaMemoryAddress=color_ptr)
     gpu_prev_gray = cv2.cuda.GpuMat()
-    gpu_prev_gray = cv2.cuda.cvtColor(gpu_prev, cv2.COLOR_BGR2GRAY)
+    gpu_prev_gray_uint8 = gpu_prev.convertTo(rtype=cv2.CV_8UC3, alpha=255.0)
+    gpu_prev_gray = cv2.cuda.cvtColor(gpu_prev_gray_uint8, cv2.COLOR_BGR2GRAY)
+
+    dense.init_disp(vertex_map_gpu)
     
     #vis 2D flow INIT
     # gpu_hsv = cv2.cuda_GpuMat(gpu_prev.size(), cv2.CV_32FC3)
@@ -868,8 +877,8 @@ def main():
     # gpu_err = cv2.cuda.GpuMat()
 
     # pixel to 3D
-    vertex_map_prev = vertex_map_np
-    normal_map_prev = normal_map_np
+    # vertex_map_prev = vertex_map_np
+    # normal_map_prev = normal_map_np
     vertex_map_gpu_prev = vertex_map_gpu #o3d tensor gpu
     normal_map_gpu_prev = normal_map_gpu #o3d tensor gpu
 
@@ -918,27 +927,36 @@ def main():
             start_cv2 = cv2.getTickCount()
             ## INPUT
             if Real_Time:
-                time_ms, count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda, vertex_map_np, vertex_map_gpu, normal_map_np, normal_map_gpu,mesh = rsManager.get_frames()
+                time_ms, count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_gpu, normal_map_gpu = rsManager.get_frames()
                 print("IMAGE NUMBER:",count, time_ms)
             elif imageStream.has_next():
-                count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda, vertex_map_np, vertex_map_gpu, normal_map_np, normal_map_gpu, mesh = imageStream.get_next_frame()
+                count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_gpu, normal_map_gpu = imageStream.get_next_frame()
                 #time_ms = time_arr[count-150]
+                time_ms = 66.67
                 print("IMAGE NUMBER:",count)#, time_ms)
             else:
                 break
 
-            gpu_curr.upload((color_image*255).astype(np.uint8))
-            gpu_curr_gray = cv2.cuda.cvtColor(gpu_curr, cv2.COLOR_BGR2GRAY)
+            #gpu_curr.upload((color_image*255).astype(np.uint8))
+            dl_color_loop = color_image.as_tensor().to_dlpack()
+            cp_color_loop = cp.from_dlpack(dl_color_loop)
+            color_loop_ptr = cp_color_loop.data.ptr
+
+            gpu_curr = cv2.cuda.createGpuMatFromCudaMemory(rows = 480, cols = 848, type=cv2.CV_32FC3, cudaMemoryAddress=color_loop_ptr)
+            gpu_curr_gray_uint8 = gpu_curr.convertTo(rtype=cv2.CV_8UC3, alpha=255.0)
+            gpu_curr_gray = cv2.cuda.cvtColor(gpu_curr_gray_uint8, cv2.COLOR_BGR2GRAY)
             #frame_diff = cv2.cuda.absdiff(gpu_prev_gray, gpu_curr_gray)
             #print("Frame difference sum:", np.sum(frame_diff.download()))
             #print("prev_gray type:", gpu_prev_gray.type(), "size:", gpu_prev_gray.size())
             #print("curr_gray type:", gpu_curr_gray.type(), "size:", gpu_curr_gray.size())
 
             ## DENSE OPTICAL FLOW
+            
+
             frame_gpu, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = dense.detect2D(gpu_prev_gray, gpu_curr_gray)
             bgr = dense.vis_hsv_2D()
-            traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5 = dense.detect3D(count,vertex_map_np,normal_map_prev)
-            
+            traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5 = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
+            dense.track_3D_vel(time_ms)
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Farne_opt_flow(gpu_prev_gray, gpu_curr_gray)
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Brox_optflow(gpu_prev_gray, gpu_curr_gray)
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Dense_pyrlk_opt_flow(gpu_prev_gray, gpu_curr_gray)
@@ -992,14 +1010,15 @@ def main():
             # d4 = draw_lines(g4.point.positions.numpy(), g5.point.positions.numpy())
             # d4.paint_uniform_color(o3d.core.Tensor([1,0,0]))
 
-            g1,g2,g3,g4,g5,d1,d2,d3,d4 = dense.vis_3D()
+            # g1,g2,g3,g4,g5,d1,d2,d3,d4 = dense.vis_3D()
+            g1,g2,d1,d2,frame,vel_arrow = dense.vis_3D()
 
             #g1,g2,g3,g4,g5,d1,d2,d3,d4 = sparse.vis_3D()
 
             t0 = time.time()
             if view_video:
-                #viewer3d.update_cloud(d1=d1,d2=d2,d3=d3,d4=d4,g5=g5)
-                viewer3d.update_cloud(d1=d1.cpu(),d2=d2.cpu(),d3=d3.cpu(),d4=d4.cpu(),g5=g5.cpu())
+                #viewer3d.update_cloud(d1=d1.cpu(),d2=d2.cpu(),d3=d3.cpu(),d4=d4.cpu(),g5=g5.cpu())
+                viewer3d.update_cloud(g1=g1.cpu(),g2=g2.cpu(),d1=d1.cpu(),d2=d2.cpu(), frame = frame.cpu(), vel_arrow = vel_arrow.cpu())   
                 viewer3d.tick()
             t1 = time.time()
             print("APP:", t1-t0)
@@ -1009,12 +1028,12 @@ def main():
             gpu_prev = gpu_curr
             gpu_prev_gray = gpu_curr_gray
 
-            prev_img = (color_image*255).astype(np.uint8)
-            prev_t2cam_pcd = t2cam_pcd
+            #prev_img = (color_image*255).astype(np.uint8)
+            # prev_t2cam_pcd = t2cam_pcd
             prev_t2cam_pcd_cuda = t2cam_pcd_cuda
 
-            vertex_map_prev = vertex_map_np
-            normal_map_prev = normal_map_np
+            # vertex_map_prev = vertex_map_np
+            # normal_map_prev = normal_map_np
             vertex_map_gpu_prev = vertex_map_gpu
             normal_map_gpu_prev = normal_map_gpu
         
@@ -1046,6 +1065,10 @@ def main():
                 break
 
             print("Time for one frame:",time_sec)
+
+            # for _ in range(6):
+            #     sys.stdout.write('\033[F')      # Move cursor up one line
+            #     sys.stdout.write('\033[K')      # Clear the entire line
 
     finally:
         if Real_Time: rsManager.stop()

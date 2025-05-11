@@ -6,8 +6,8 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.pyplot as plt
-from capture_realsense_tensor import RealSenseManager
-from replay_realsense_tensor import read_RGB_D_folder
+from capture_realsense_tensor_def import RealSenseManager
+from replay_realsense_tensor_def import read_RGB_D_folder
 from SIFT_Detect import siftDetect
 from Farneback_Detect import farnebackDetect
 from LK_Dense import lkDense
@@ -21,6 +21,7 @@ import cProfile
 import faiss
 import os
 from numba import njit
+import cupy as cp
 
 plt.ioff() 
 
@@ -154,14 +155,14 @@ def find_tag_point_ID_correspondence(pcd,m_points):
             model_correspondences (list): a list of Point IDs Correspondences on the model for each tag
     """
     print("Finding tag-point correspondences in model")
-    pcd_tree = o3d.geometry.KDTreeFlann(pcd.to_legacy())
+    pcd_tree = o3d.geometry.KDTreeFlann(pcd.cpu().to_legacy())
     tag_norm = []
     model_correspondence = []
     for tag in range(0,len(m_points)):
         [k, idx, _] = pcd_tree.search_knn_vector_3d(m_points[tag],1)
         model_correspondence.append(idx[0])
         #np.asarray(pcd.colors)[idx[1:], :] = [0, 0, 1]
-        m_norm = pcd.point.normals.numpy()[idx[1:], :]
+        m_norm = pcd.point.normals.cpu().numpy()[idx[1:], :]
         m_norm_ave = np.mean(m_norm, axis=0)
         tag_norm.append(m_norm_ave)
     print("Completed")
@@ -205,7 +206,7 @@ def vis_window(*geometries):
     vis.run()
     vis.destroy_window() 
 
-def find_t2cam_correspondence(t2cam_points,tag_locations,debug_mode=True):
+def find_t2cam_correspondence(t2cam_cuda,tag_locations,debug_mode=True):
     """
     Function to find t2cam point IDs from tag locations 
     using np.where
@@ -215,7 +216,7 @@ def find_t2cam_correspondence(t2cam_points,tag_locations,debug_mode=True):
         tag_locations (list): list of tag [x,y,z] locations
 
     Returns:
-        indices (numpy.ndarray) A NumPy array of correspondence Point IDs
+        indices (o3d.core.Tensor)(numpy.ndarray) A NumPy array of correspondence Point IDs
     """
 
     # indices = []
@@ -225,8 +226,8 @@ def find_t2cam_correspondence(t2cam_points,tag_locations,debug_mode=True):
     #     indices.append(idx)
 
     # return np.array(indices).flatten()
-    t2cam_tensor = t2cam_points.cuda()
-    tags_tensor = o3d.core.Tensor(tag_locations, dtype=o3d.core.Dtype.Float32, device=o3d.core.Device("CUDA:0"))
+    t2cam_tensor = t2cam_cuda.point.positions
+    tags_tensor = o3d.core.Tensor(tag_locations, device=o3d.core.Device("CUDA:0"))
 
     tags_reshaped = tags_tensor.reshape((-1, 1, 3))
     t2cam_reshaped = t2cam_tensor.reshape((1, -1, 3))
@@ -235,16 +236,16 @@ def find_t2cam_correspondence(t2cam_points,tag_locations,debug_mode=True):
     diff = tags_reshaped - t2cam_reshaped
     dist2 = diff * diff
     dist2_sum = dist2.sum(2)
-
+    
     # Get index of nearest point in t2cam for each tag location
-    nearest_indices = dist2_sum.argmin(1)
+    nearest_indices_gpu = dist2_sum.argmin(1)
 
     if debug_mode:
-        nearest_points = t2cam_tensor[nearest_indices]
+        nearest_points = t2cam_tensor[nearest_indices_gpu]
         for i in range(len(tag_locations)):
             print(f"Tag: {tag_locations[i]}, Match: {nearest_points[i].cpu().numpy()}")
 
-    return nearest_indices.cpu().numpy()
+    return nearest_indices_gpu
 
 def make_correspondence_vector(t2cam_correspondence,model_correspondence,tag_IDs,correctTags,debug_mode):
     """
@@ -262,13 +263,22 @@ def make_correspondence_vector(t2cam_correspondence,model_correspondence,tag_IDs
     """
     str_tags = [str(e) for e in tag_IDs]
     p = t2cam_correspondence
-    q = np.array([model_correspondence[correctTags.index(tag)] for tag in str_tags])
-    pq = np.asarray([[p[i], q[i]] for i in range(len(p))]) 
-    if debug_mode: print(pq) 
-    corres = o3d.utility.Vector2iVector(pq)
-    return corres
+    q = cp.array([model_correspondence[correctTags.index(tag)] for tag in str_tags], dtype=cp.int64)
+    # pq = np.asarray([[p[i], q[i]] for i in range(len(p))]) 
+    # if debug_mode: print(pq) 
+    # corres = o3d.utility.Vector2iVector(pq)
+    n = p.shape[0]
+    #corr = cp.empty((n, 1), dtype=np.int64)
+    corr = cp.arange(n, dtype=np.int64)
+    dl_corr = corr.toDlpack()
+    corres = o3d.core.Tensor.from_dlpack(dl_corr)
+    dl_q = q.toDlpack()
+    q_tensor = o3d.core.Tensor.from_dlpack(dl_q)
+    # print(p)
+    # print(q_tensor)
+    return corres, p, q_tensor
 
-def register_t2cam_with_model(mesh,t2cam_pcd_cuda,t2cam_pcd,model_pcd,corres_vector):
+def register_t2cam_with_model(mesh,t2cam_pcd_cuda,model_pcd_cuda,corres_vector,p,q):
     """
     Function that transforms the T2Cam point cloud to register with the inner tyre model point cloud
 
@@ -277,12 +287,16 @@ def register_t2cam_with_model(mesh,t2cam_pcd_cuda,t2cam_pcd,model_pcd,corres_vec
         model_pcd (o3d.geometry.PointCloud): open3d Point Cloud of inner tyre model
         corres_vector (o3d.utility.Vector2iVector): Correspondence array for registration 
     """
-    estimator = o3d.pipelines.registration.TransformationEstimationPointToPoint()
-    T = estimator.compute_transformation(t2cam_pcd.to_legacy(),model_pcd.to_legacy(),corres_vector)
-    t2cam_pcd.transform(T)
+    #estimator = o3d.pipelines.registration.TransformationEstimationPointToPoint()
+    #T = estimator.compute_transformation(t2cam_pcd.to_legacy(),model_pcd.to_legacy(),corres_vector)
+    #t2cam_pcd.transform(T)
+    estimator = o3d.t.pipelines.registration.TransformationEstimationPointToPoint()
+    icp_t2cam = t2cam_pcd_cuda.select_by_index(p)
+    icp_model = model_pcd_cuda.select_by_index(q)
+    T = estimator.compute_transformation(icp_t2cam,icp_model,corres_vector)
     t2cam_pcd_cuda.transform(T)
     mesh.transform(T)
-    #o3d.visualization.draw([t2cam_pcd, model_pcd])
+    # o3d.visualization.draw([icp_t2cam, icp_model,t2cam_pcd_cuda, model_pcd_cuda])
     
 def draw_registration_result(source, target,frame):
     '''
@@ -299,7 +313,7 @@ def draw_registration_result(source, target,frame):
     target_temp.paint_uniform_color([0, 0.651, 0.929])
     o3d.visualization.draw([source_temp, target_temp,frame])
 
-def segment_pcd_using_bounding_box(t2cam_pcd_cuda,t2cam_pcd,model_pcd, model_pcd_cuda):
+def segment_pcd_using_bounding_box(t2cam_pcd_cuda,model_pcd, model_pcd_cuda):
     """
     Segment the model point cloud to contain that section of t2Cam point cloud
     calculate bounding box of t2cam_pcd and crop model according to it
@@ -323,7 +337,7 @@ def segment_pcd_using_bounding_box(t2cam_pcd_cuda,t2cam_pcd,model_pcd, model_pcd
     #print("AFTER",np.size(cropped_model.point.positions.numpy()))
     return cropped_model, cropped_model_cuda
 
-def ICP_register_T2Cam_with_model(mesh,cropped_model,t2cam_pcd, d_t2_points,downsampled_cropped_model, draw_reg):
+def ICP_register_T2Cam_with_model(mesh,cropped_model_cuda,t2cam_pcd_cuda,d_t2_points,downsampled_cropped_model_cu, draw_reg):
     '''
     Performs Iterative Closest Point Registration to the Undeformed Cropped Inner Model and Deformed Inner T2Cam PCD
 
@@ -334,28 +348,35 @@ def ICP_register_T2Cam_with_model(mesh,cropped_model,t2cam_pcd, d_t2_points,down
     '''
 
     #find centre of pointcloud 
-    mid_xyz = (np.ptp(d_t2_points,axis=0)/2 + np.min(d_t2_points,axis=0))
-    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(origin = mid_xyz,size = 0.1)
+    dl_d_t2_points = d_t2_points.to_dlpack()
+    cp_d_t2_points = cp.from_dlpack(dl_d_t2_points)
+    mid_xyz = (cp.ptp(cp_d_t2_points,axis=0)/2 + cp.min(cp_d_t2_points,axis=0))
 
+    dl_mid_xyz = mid_xyz.toDlpack()
+    o3d_mid_xyz = o3d.core.Tensor.from_dlpack(dl_mid_xyz)
+    frame = o3d.t.geometry.TriangleMesh.create_coordinate_frame(size = 0.1,device=o3d.core.Device("CUDA:0"))
+    frame.translate(o3d_mid_xyz)
     # create mask to select the outer points in the pcd to avoid registration with the deformed parts
-    mask = ((d_t2_points[:,0]-mid_xyz[0])**2+(d_t2_points[:,1]-mid_xyz[1])**2+((d_t2_points[:,2]-mid_xyz[2])/1.2)**2) > 0.12**2
+    mask = ((cp_d_t2_points[:,0]-mid_xyz[0])**2+(cp_d_t2_points[:,1]-mid_xyz[1])**2+((cp_d_t2_points[:,2]-mid_xyz[2])/1.2)**2) > 0.12**2
     
     # create a new pcd with the masked downsampled pointcloud
     # downsampled_points_removed_def = d_t2_points[mask]
     # downsampled_t2cam_removed_def = o3d.geometry.PointCloud()
     # downsampled_t2cam_removed_def.points = o3d.utility.Vector3dVector(downsampled_points_removed_def) 
-    downsampled_points_removed_def = d_t2_points[mask]
+    downsampled_points_removed_def = cp_d_t2_points[mask]
+
+    dl_downsampledd_points_removed_def = downsampled_points_removed_def.toDlpack()
     downsampled_t2cam_removed_def = o3d.t.geometry.PointCloud(device = o3d.core.Device("CUDA:0"))
-    downsampled_t2cam_removed_def.point.positions = o3d.core.Tensor(downsampled_points_removed_def, device = o3d.core.Device("CUDA:0")) 
-    d = downsampled_cropped_model.cuda()
-    print(d.point.normals.device)
-    print("Apply point-to-plane ICP")
+    downsampled_t2cam_removed_def.point.positions = o3d.core.Tensor.from_dlpack(dl_downsampledd_points_removed_def) #o3d.core.Tensor(downsampled_points_removed_def, device = o3d.core.Device("CUDA:0")) 
+    #d = downsampled_cropped_model.cuda()
+    #print(d.point.normals.device)
+    #print("Apply point-to-plane ICP")
     t_s_reg = time.time()
     # reg_p2p = o3d.pipelines.registration.registration_icp(downsampled_t2cam_removed_def, downsampled_cropped_model.to_legacy(), max_correspondence_distance = 0.02,
     #                                                       estimation_method = o3d.pipelines.registration.TransformationEstimationPointToPlane(),
     #                                                       criteria = o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-8,relative_rmse=1.000000e-08,max_iteration=100))
     reg_p2p = o3d.t.pipelines.registration.icp(source = downsampled_t2cam_removed_def,
-                                                target = d,
+                                                target = downsampled_cropped_model_cu,
                                                 max_correspondence_distance = 0.02,
                                                 estimation_method = o3d.t.pipelines.registration.TransformationEstimationPointToPlane(),
                                                 criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1.000000e-08, relative_rmse=1.000000e-08, max_iteration=100))
@@ -365,11 +386,11 @@ def ICP_register_T2Cam_with_model(mesh,cropped_model,t2cam_pcd, d_t2_points,down
     print("Transformation is:")
     print(reg_p2p.transformation)
 
-    if draw_reg: draw_registration_result(t2cam_pcd,cropped_model,frame)
-    t2cam_pcd.transform(reg_p2p.transformation)
+    if draw_reg: draw_registration_result(t2cam_pcd_cuda,cropped_model_cuda,frame)
+    t2cam_pcd_cuda.transform(reg_p2p.transformation)
     mesh.transform(reg_p2p.transformation)
     #if draw_reg: draw_registration_result(downsampled_t2cam_removed_def, downsampled_t2cam, reg_p2p.transformation,frame)
-    if draw_reg: draw_registration_result(t2cam_pcd,cropped_model,frame)
+    if draw_reg: draw_registration_result(t2cam_pcd_cuda,cropped_model_cuda,frame)
 
 # def inner_deformed_to_inner_undeformed(mesh, model_pcd_cuda,t2cam_pcd_cuda,count,t2cam_pcd,model_pcd,model_ply,draw_reg):
 
@@ -411,7 +432,7 @@ def ICP_register_T2Cam_with_model(mesh,cropped_model,t2cam_pcd, d_t2_points,down
 #     print("APPEND",t2-t1)
 #     print("CAST",t3-t2)
 
-def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,t2cam_pcd,model_pcd,model_ply,draw_reg):
+def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg):
     """
     Function to get the SIGNED corressponding distances between 
     the T2Cam Point Cloud and the Inner Tyre Model
@@ -429,25 +450,27 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     """
     start_cv2 = cv2.getTickCount()
     ## crop the undeformed model to the t2cam pcd size
-    cropped_model_pcd, cropped_model_cuda = segment_pcd_using_bounding_box(t2cam_pcd_cuda,t2cam_pcd,model_pcd,model_pcd_cuda)
+    cropped_model_pcd, cropped_model_cuda = segment_pcd_using_bounding_box(t2cam_pcd_cuda,model_pcd,model_pcd_cuda)
     end_cv2 = cv2.getTickCount()
     time_sec = (end_cv2-start_cv2)/cv2.getTickFrequency()
     print("SEGMENT:", time_sec)
     t_s_begin = time.time()
     ## downsample t2cam and cropped model and store its respective points
-    downsampled_t2cam = t2cam_pcd.uniform_down_sample(every_k_points=10)
-    downsampled_cropped_model = cropped_model_pcd.uniform_down_sample(every_k_points=10)
+    downsampled_t2cam_cu = t2cam_pcd_cuda.uniform_down_sample(every_k_points=10)
+    downsampled_cropped_model_cu = cropped_model_cuda.uniform_down_sample(every_k_points=10)
     #downsampled_t2cam = t2cam_pcd
     #downsampled_cropped_model = cropped_model_pcd
-    d_t2_points = downsampled_t2cam.point.positions.numpy()
-    d_model_points = downsampled_cropped_model.point.positions.numpy()
+    d_t2_points = downsampled_t2cam_cu.point.positions #.numpy()
+    d_model_points = downsampled_cropped_model_cu.point.positions.cpu().numpy() #.numpy()
+
     t_e_begin = time.time()
     ## register using ICP for better alignment
-    ICP_register_T2Cam_with_model(mesh,cropped_model_pcd,t2cam_pcd,d_t2_points,downsampled_cropped_model,draw_reg)
+    ICP_register_T2Cam_with_model(mesh,cropped_model_cuda,t2cam_pcd_cuda,d_t2_points,downsampled_cropped_model_cu,draw_reg)
     
     ## downsample t2cam and cropped model and store its respective points
-    downsampled_t2cam = t2cam_pcd.uniform_down_sample(every_k_points=10)
-    d_t2_points = downsampled_t2cam.point.positions.numpy()
+    downsampled_t2cam_cu = t2cam_pcd_cuda.uniform_down_sample(every_k_points=10)
+    d_t2_points = downsampled_t2cam_cu.point.positions.cpu().numpy() #.numpy()
+
     
     print("BEGIN:", t_e_begin-t_s_begin)
     ## CANT USE .compute_point_cloud_distance as it does not give vector distance
@@ -487,26 +510,28 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     ## vector distance
     t_s = time.time()
     dist = d_model_points - d_t2_points[idx]
-
+    cp_dist = cp.asarray(dist)
     ## scalar distance
-    d_dist = np.linalg.norm(dist, axis=1)
+    d_dist = cp.linalg.norm(cp_dist, axis=1)
     
     ## normalised normals of model 
-    normals_undeformed = downsampled_cropped_model.point.normals.numpy()
-    normals_undeformed /= np.linalg.norm(normals_undeformed, axis=1, keepdims=True) + 1e-8
+    o3d_normals_undeformed = downsampled_cropped_model_cu.point.normals #.numpy()
+    dl_normals_undeformed = o3d_normals_undeformed.to_dlpack()
+    cp_normals_undeformed = cp.from_dlpack(dl_normals_undeformed)
+    cp_normals_undeformed /= cp.linalg.norm(cp_normals_undeformed, axis=1, keepdims=True) + 1e-8
 
     ## Calculated Signed Distance (dot of the vector distance and normal: if < 90 = 1 if > 90 = -1)
-    dot_product = (-1)*np.sign(np.sum(dist * normals_undeformed, axis=1))
+    dot_product = (-1)*cp.sign(cp.sum(cp_dist * cp_normals_undeformed, axis=1))
     d_dist = dot_product*d_dist
 
     ## color correspodnece to signed distance according to 'plasma'
-    d_colors = plt.get_cmap('plasma')((d_dist - d_dist.min()) / (d_dist.max() - d_dist.min()))
+    d_colors = plt.get_cmap('plasma')(((d_dist - d_dist.min()) / (d_dist.max() - d_dist.min())).get())
     d_colors = d_colors[:, :3]
 
     # Create new pcd with color correspondence to deformation
-    t2_d_pcd = o3d.t.geometry.PointCloud()
-    t2_d_pcd.point.positions = downsampled_cropped_model.point.positions
-    t2_d_pcd.point.colors = o3d.core.Tensor(d_colors)
+    t2_d_pcd_cu = o3d.t.geometry.PointCloud(device = o3d.core.Device("CUDA:0"))
+    t2_d_pcd_cu.point.positions = downsampled_cropped_model_cu.point.positions
+    t2_d_pcd_cu.point.colors = o3d.core.Tensor(d_colors).cuda()
     t_e = time.time()
     print("REST: ",t_e-t_s)
     ## DEBUG Visualisation
@@ -526,7 +551,7 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     #o3d.io.write_point_cloud("./Inner_Deformation/{}.pcd".format(count), t2_d_pcd)
     t__1 = time.perf_counter()
     print("Figure saving time: ",t__1-t__0)
-    return t2_d_pcd, np.max(d_dist), downsampled_cropped_model, d_dist
+    return t2_d_pcd_cu, np.max(d_dist), downsampled_cropped_model_cu, d_dist
 
 def run_vis_app(t2cam_pcd,cropped_model_pcd):
     '''
@@ -609,7 +634,7 @@ def load_outer_inner_corres(file_name):
         rays_hit_end_io = np.load(f)
     return rays_hit_start_io, rays_hit_end_io
 
-def projectOuter(count,kdtree,rays_hit_start_io,rays_hit_end_io,cropped_model_pcd,d_dist,normals,t2_d_pcd):
+def projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_model_pcd_cu,d_dist,normals,t2_d_pcd_cu):
     '''
     Function to use inner_to_outer.npz correspondence and get the SIGNED corresponding distances between 
     the Outer Undeformed Model and the Projected Outer T2Cam  
@@ -634,7 +659,7 @@ def projectOuter(count,kdtree,rays_hit_start_io,rays_hit_end_io,cropped_model_pc
         d_colors_outer (np.ndarray): A NumPy (N,3) RGB array of color mapped distances
     '''
     t0 = time.time()
-    cropped_points = cropped_model_pcd.point.positions.numpy()
+    cropped_points = cropped_model_pcd_cu.point.positions.cpu().numpy() #.numpy()
 
     ## Finding index using np.where
     #idx = [np.where((rays_hit_start_io == xyz).all(axis=1))[0] for xyz in cropped_points]
@@ -649,23 +674,26 @@ def projectOuter(count,kdtree,rays_hit_start_io,rays_hit_end_io,cropped_model_pc
     t_1 = time.perf_counter()
     print(t_1-t_0)
 
+    dl_d_dist = d_dist[:,None].toDlpack()
+    o3d_d_dist = o3d.core.Tensor.from_dlpack(dl_d_dist)
+
     # Create Outer Undeformed and Deformed PointClouds and use the normals and signed distances to get the deformed pcd
-    model_outer_deformed = o3d.t.geometry.PointCloud()
-    model_outer_deformed.point.positions = o3d.core.Tensor(rays_hit_end_io[idx] + d_dist[:, None] * normals[idx])
-    model_outer_undeformed = o3d.t.geometry.PointCloud()
-    model_outer_undeformed.point.positions = o3d.core.Tensor(rays_hit_end_io[idx])
+    model_outer_deformed_cu = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
+    model_outer_deformed_cu.point.positions = rays_hit_end_io_cu[idx] + o3d_d_dist * normals[idx]
+    model_outer_undeformed_cu = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
+    model_outer_undeformed_cu.point.positions = rays_hit_end_io_cu[idx]
     
     # Assume rubber is incompressible: Therefore, outer tread moves the same as the inner carcass
     d_outer_dist = d_dist
 
     # Color map according to distance
-    d_colors_outer = plt.get_cmap('plasma')((d_outer_dist - d_outer_dist.min()) / (d_outer_dist.max() - d_outer_dist.min()))
+    d_colors_outer = plt.get_cmap('plasma')(((d_outer_dist - d_outer_dist.min()) / (d_outer_dist.max() - d_outer_dist.min())).get())
     d_colors_outer = d_colors_outer[:, :3]
 
     # Create colormapped PointCloud
-    t2_d_pcd_outer = o3d.t.geometry.PointCloud()
-    t2_d_pcd_outer.point.positions = model_outer_deformed.point.positions
-    t2_d_pcd_outer.point.colors = o3d.core.Tensor(d_colors_outer)
+    t2_d_pcd_outer_cu = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
+    t2_d_pcd_outer_cu.point.positions = model_outer_deformed_cu.point.positions
+    t2_d_pcd_outer_cu.point.colors = o3d.core.Tensor(d_colors_outer).cuda()
 
     t1 = time.time()
     print(t1-t0)
@@ -689,7 +717,7 @@ def projectOuter(count,kdtree,rays_hit_start_io,rays_hit_end_io,cropped_model_pc
     t__1 = time.perf_counter()
     print("Figure saving time: ",t__1-t__0)
 
-    return t2_d_pcd_outer, np.max(d_outer_dist), cropped_model_pcd, d_outer_dist, model_outer_deformed,model_outer_undeformed, d_colors_outer
+    return t2_d_pcd_outer_cu, np.max(d_outer_dist), cropped_model_pcd_cu, d_outer_dist, model_outer_deformed_cu,model_outer_undeformed_cu, d_colors_outer
 
 def extract_inner_contact_patch_edge(count,t2_d_pcd_inner,d_inner_dist):
     eps = 0.001
@@ -795,6 +823,8 @@ def main():
     #model_pcd = load_model_pcd(file_path_model,scale)
     model_pcd = o3d.t.geometry.PointCloud()
     model_pcd.point.positions = o3d.core.Tensor(rays_hit_start_io)
+    rays_hit_start_io_cu = o3d.core.Tensor(rays_hit_start_io).cuda()
+    rays_hit_end_io_cu = o3d.core.Tensor(rays_hit_end_io).cuda()
     model_pcd.estimate_normals()
     model_pcd_cuda = model_pcd.cuda()
     print(np.size(model_pcd.point.normals.numpy()))
@@ -802,11 +832,11 @@ def main():
     ## LOAD PLY AND PCD OF INNER TREAD AND INNER FULL MODEL
     model_ply = load_model_ply(file_path_model,scale)
     model_tread_pcd = load_model_pcd(file_path_tread,scale)
-    normals_model_pcd = model_pcd.point.normals.numpy()
+    normals_model_pcd = model_pcd.point.normals.cuda()
     normals_tread_pcd = np.asarray(model_tread_pcd.normals)
 
     ## FIND PCD INDICES OF APRILTAG LOCATIONS 
-    tag_norm, model_correspondence = find_tag_point_ID_correspondence(model_pcd, m_points)
+    tag_norm, model_correspondence = find_tag_point_ID_correspondence(model_pcd_cuda, m_points)
     tag_normals_line_set = draw_lines(m_points, tag_norm)
 
     ## DEBUG
@@ -850,11 +880,11 @@ def main():
             start_loop_time = time.time()
             ## INPUT
             if Real_Time:
-                time_ms, count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda, vertex_map_np, normal_map_np = rsManager.get_frames()
+                time_ms, count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_np, normal_map_np = rsManager.get_frames()
                 print("IMAGE NUMBER:",count)
             elif imageStream.has_next():
-                count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda, vertex_map_np, vertex_map_gpu, normal_map_np, normal_map_gpu, t2cam_ply = imageStream.get_next_frame()
-                time_ms = time_arr[count-150]
+                count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_np, vertex_map_gpu, normal_map_gpu, t2cam_ply = imageStream.get_next_frame()
+                #time_ms = time_arr[count-150]
                 print("IMAGE NUMBER:",count)
             else:
                 break
@@ -873,19 +903,19 @@ def main():
             print("3D_process:", t_2-t_1)
         
             ## APRILTAG CORRESPONDENCE
-            t2cam_correspondence = find_t2cam_correspondence(t2cam_pcd.point.positions,np.array(tag_locations),debug_mode)
+            t2cam_correspondence_gpu = find_t2cam_correspondence(t2cam_pcd_cuda,np.array(tag_locations),debug_mode)
             time_at_t2cam_corres = time.time()
             t2cam_corres_time = time_at_t2cam_corres - time_at_detection
             print("T2Cam Correspondence Point IDs calculated in:", t2cam_corres_time)
 
             # PREPROCESING FOR APRILTAG ALIGNMENT
-            correspondence_vector = make_correspondence_vector(t2cam_correspondence,model_correspondence,tag_IDs,correctTags,debug_mode)
+            correspondence_vector,p,q = make_correspondence_vector(t2cam_correspondence_gpu,model_correspondence,tag_IDs,correctTags,debug_mode)
             time_at_corres_vec = time.time()
             corres_vec_time = time_at_corres_vec - time_at_t2cam_corres
             print("Corres Vector made in", corres_vec_time)
 
             ## ROUGH ALIGNMENT WITH T2CAM USING APRILTAGS
-            register_t2cam_with_model(t2cam_ply,t2cam_pcd_cuda,t2cam_pcd,model_pcd,correspondence_vector)
+            register_t2cam_with_model(t2cam_ply,t2cam_pcd_cuda,model_pcd_cuda,correspondence_vector,p,q)
             time_at_registration = time.time()
             register_time = time_at_registration - time_at_corres_vec
             print("Registration in", register_time)
@@ -908,21 +938,21 @@ def main():
 
             ## INNER SIGNED DISTANCE DEFORMATION CALCULATION WITH REFINED ICP REGISTRATION
             #inner_deformed_to_inner_undeformed(t2cam_ply, model_pcd_cuda,t2cam_pcd_cuda,count,t2cam_pcd,model_pcd,model_ply,draw_reg)
-            t2_d_pcd_inner, max_inner_def, cropped_model_pcd, d_inner_dist = inner_deformed_to_inner_undeformed(t2cam_ply,model_pcd_cuda,t2cam_pcd_cuda,count,t2cam_pcd,model_pcd,model_ply,draw_reg)
+            t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist = inner_deformed_to_inner_undeformed(t2cam_ply,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg)
             time_at_Inner_c2c = time.time()
             c2c_dist_time = time_at_Inner_c2c - time_at_registration
             print("Inner C2C distance calculated in", c2c_dist_time)
 
-            ## OUTER TREAD DEFORMATION
-            t2_d_pcd_outer, max_outer_def, cropped_model_pcd, d_outer_dist, model_outer_deformed,model_outer_undeformed,d_outer_colors = projectOuter(count,kdtree,rays_hit_start_io,rays_hit_end_io,cropped_model_pcd,d_inner_dist,normals_model_pcd,t2_d_pcd_inner)
+            # ## OUTER TREAD DEFORMATION
+            t2_d_pcd_outer_cu, max_outer_def, cropped_model_pcd_cu, d_outer_dist, model_outer_deformed,model_outer_undeformed,d_outer_colors = projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_model_pcd_cu,d_inner_dist,normals_model_pcd,t2_d_pcd_inner_cu)
             time_at_Outer_c2c = time.time()
             c2c_dist_time = time_at_Outer_c2c - time_at_Inner_c2c
             print("Outer C2C distance calculated in", c2c_dist_time)
-            #o3d.visualization.draw_geometries([t2cam_dist_pcd])
+            # #o3d.visualization.draw_geometries([t2cam_dist_pcd])
 
             ## UPDATE VIEWER
             if view_video:
-                viewer3d.update_cloud(t2_d_pcd_inner,t2_d_pcd_outer)
+                viewer3d.update_cloud(geometries = t2_d_pcd_inner_cu.cpu(),lines = t2_d_pcd_outer_cu.cpu())
                 viewer3d.tick()
             time_at_app_view = time.time()
             app_view_time = time_at_app_view - time_at_Outer_c2c
@@ -951,7 +981,7 @@ def main():
                 print("===========================================")
 
                 print("==============CORRESPONDENCES==============")
-                print("T2Cam point IDs",t2cam_correspondence)
+                print("T2Cam point IDs",t2cam_correspondence_gpu)
                 print("Model point IDS", model_correspondence)
                 print("===========================================")
                 if key == 27:

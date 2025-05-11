@@ -98,8 +98,8 @@ class read_RGB_D_folder:
         self.index += 1
         depth_scale = 1/0.0001
        
-        filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 10, dist_sigma = 20.0)
-        vertex_map =filtered_depth.create_vertex_map(self.intrinsic)
+        #filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 10, dist_sigma = 20.0)
+        vertex_map = current_depth_cuda.create_vertex_map(self.intrinsic)
         normal_map = vertex_map.create_normal_map()
 
         pcd_cuda = o3d.t.geometry.PointCloud(self.cu)
@@ -108,24 +108,24 @@ class read_RGB_D_folder:
         pcd_cuda.point.colors = current_color_cuda.as_tensor().reshape((-1, 3))
         #pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
-        # vertex_map_np = vertex_map.as_tensor().cpu().numpy()
-        # normal_map_np = normal_map.as_tensor().cpu().numpy()
+        vertex_map_np = vertex_map.as_tensor().cpu().numpy()
+        normal_map_np = normal_map.as_tensor().cpu().numpy()
 
         #pcd = pcd_cuda.cpu()
 
-        # vertices = vertex_map_np.reshape(-1, 3)
-        # normals = normal_map_np.reshape(-1, 3)
+        vertices = vertex_map_np.reshape(-1, 3)
+        normals = normal_map_np.reshape(-1, 3)
 
-        # mask = (vertices[:,2] != 0)
-        # v = np.count_nonzero(mask)
+        mask = (vertices[:,2] != 0)
+        v = np.count_nonzero(mask)
 
-        # valid_triangles = filter_triangles(self.triangles, mask)
+        valid_triangles = filter_triangles(self.triangles, mask)
 
 
-        # mesh = o3d.t.geometry.TriangleMesh(o3d.core.Device("CPU:0"))
-        # mesh.vertex.positions = o3d.core.Tensor(vertices, o3d.core.float32, o3d.core.Device("CPU:0"))
-        # mesh.triangle.indices = o3d.core.Tensor(valid_triangles, o3d.core.int32, o3d.core.Device("CPU:0"))
-        # mesh.vertex.normals = o3d.core.Tensor(normals,o3d.core.float32, o3d.core.Device("CPU:0"))
+        mesh = o3d.t.geometry.TriangleMesh(o3d.core.Device("CPU:0"))
+        mesh.vertex.positions = o3d.core.Tensor(vertices, o3d.core.float32, o3d.core.Device("CPU:0"))
+        mesh.triangle.indices = o3d.core.Tensor(valid_triangles, o3d.core.int32, o3d.core.Device("CPU:0"))
+        mesh.vertex.normals = o3d.core.Tensor(normals,o3d.core.float32, o3d.core.Device("CPU:0"))
 
         # t5 = time.time()
         #print("1: ", t1-t0)
@@ -143,7 +143,7 @@ class read_RGB_D_folder:
         #o3d.visualization.draw_geometries([mesh.to_legacy()])
         #mesh_cpu = mesh.cpu()
 
-        return self.index, current_depth_np, current_color_cuda , pcd_cuda, vertex_map, normal_map
+        return self.index, current_depth_np, current_color_np , pcd_cuda, vertex_map_np, vertex_map, normal_map, mesh
 
 @numba.jit(nopython=True)
 def filter_triangles(triangles, mask):

@@ -27,7 +27,6 @@ class DetectAprilTagsWindows():
     def input_frame(self, color_image):
         self.color_image = (color_image.copy()*255).astype(np.uint8)
         self.gray = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2GRAY)
-        print(self.gray.dtype)
         self.detections = self.detector.detect(self.gray)
         self.tag_IDs = []
         self.tag_locations = []
@@ -46,7 +45,7 @@ class DetectAprilTagsWindows():
                 self.fail_count_per_frame += 1
             else:
                 self.tag_IDs.append(detection.getId())
-                self.tag_locations.append([x,-y,-z])
+                self.tag_locations.append([x,y,z])
 
             # Draw around the tag
             if self.debug_mode:
@@ -70,7 +69,6 @@ class DetectAprilTagsWindows():
                     self.crossColor,
                     2
                 )
-        print(self.tag_IDs)
         return self.tag_IDs, self.tag_locations
 
 

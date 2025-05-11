@@ -19,7 +19,7 @@ inner_to_treads: 'inner_to_treads_correspondences.npy'
 RGB_D_folder: 'realsense2' #'test1' #'realsense2' #'../../DATA/test_eg_horizontal_10mm_disp_no_slip_d0_c0' # 'realsense2'
 image_depth_profile: 3 #3
 image_color_profile: 18 #18
-start_index: 0 #150 #100
+start_index: 150 #150 #100
 
 #CAMERA SETTINGS
 cam_depth_profile: 3

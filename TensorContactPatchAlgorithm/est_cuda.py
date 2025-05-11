@@ -3,19 +3,23 @@ import numpy as np
 from replay_realsense_tensor import read_RGB_D_folder
 import time 
 import cv2
+import matplotlib.pyplot as plt
 
-imageStream = read_RGB_D_folder('realsense2',starting_index=150,depth_num=3,debug_mode=False)
-while imageStream.has_next():
-    start_cv2 = cv2.getTickCount()
-    if imageStream.has_next():
-        count, depth_image, color_image, t2cam_pcd, t2cam_pcd_cuda,vertex_map_np, vertex_map_gpu, normal_map_np , normal_map_gpu,mesh= imageStream.get_next_frame()
-    #t2cam_pcd.to_legacy()
-    end_cv2 = cv2.getTickCount()
-    time_sec = (end_cv2-start_cv2)/cv2.getTickFrequency()
-    key = cv2.waitKey(1)
-    if key == ord('q'):
-        break
-    print("FPS:", time_sec)
+c_map = plt.get_cmap('plasma')
+print()
+
+# imageStream = read_RGB_D_folder('realsense2',starting_index=150,depth_num=3,debug_mode=False)
+# while imageStream.has_next():
+#     start_cv2 = cv2.getTickCount()
+#     if imageStream.has_next():
+#         count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_gpu, normal_map_gpu= imageStream.get_next_frame()
+#     #t2cam_pcd.to_legacy()
+#     end_cv2 = cv2.getTickCount()
+#     time_sec = (end_cv2-start_cv2)/cv2.getTickFrequency()
+#     key = cv2.waitKey(1)
+#     if key == ord('q'):
+#         break
+#     print("FPS:", time_sec)
 
 # intrinsic = o3d.core.Tensor([[433.4320983886719,0,416.3398132324219],[0,432.88079833984375,238.8269500732422],[0,0,1]]).cuda()
 # #print(np.asarray(intrinsic))

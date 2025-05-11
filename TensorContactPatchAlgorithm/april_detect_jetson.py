@@ -44,7 +44,7 @@ class DetectAprilTagsJetson():
                 self.fail_count_per_frame += 1
             else:
                 self.tag_IDs.append(detection.tag_id)
-                self.tag_locations.append([x,-y,-z])
+                self.tag_locations.append([x,y,z])
 
             # Draw around the tag
             if self.debug_mode:
