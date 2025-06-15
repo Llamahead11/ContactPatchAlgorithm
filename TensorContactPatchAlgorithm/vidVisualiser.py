@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import open3d
 import os
@@ -44,7 +44,7 @@ def createDispPlot(label ,fig, ax, clipped, prev_3D_points, vmin=-0.003, vmax=0.
     ax_hist.set_ylim(vmin, vmax)
 
 def createOuterDeformationPlot(label, points, dist, vmin=-0.003, vmax=0.003):
-    fig = plt.figure(figsize=(6,6))
+    fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot(111, projection='3d')
     sc = ax.scatter(points[:, 2], -points[:, 0], points[:, 1], c=dist, cmap='plasma', s=2,vmin=vmin, vmax=vmax)
     ax.set_title("{} Deformation".format(label))
@@ -53,6 +53,9 @@ def createOuterDeformationPlot(label, points, dist, vmin=-0.003, vmax=0.003):
     plt.ylim(-0.3,0.3)
     plt.xlim(0,0.3)
     ax.set_zlim(0,0.4)
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
+    ax.set_zlabel("z [m]")
     ax.set_box_aspect([ub - lb for lb, ub in (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
     cbar = fig.colorbar(sc, ax=ax, orientation='vertical', label='Displacement [m]')
     cbar.ax.yaxis.tick_left()   
@@ -67,6 +70,7 @@ def createOuterDeformationPlot(label, points, dist, vmin=-0.003, vmax=0.003):
         patch.set_facecolor(color)
     ax_hist.set_xticks(np.linspace(0,np.max(hist),2))
     ax_hist.set_yticks(np.linspace(vmin, vmax, num=7))
+    ax_hist.set_yticklabels([])
     ax_hist.set_ylim(vmin, vmax)
     return fig, sc
 

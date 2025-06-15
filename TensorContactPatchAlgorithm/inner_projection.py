@@ -8,11 +8,11 @@ from rough_vis_deformation import load_rc_control_points, convert_rc_apriltag_he
 #model_inner_pcd = o3d.io.read_point_cloud("full_outer_inner_part_only.ply")
 model_inner_ply = o3d.t.io.read_triangle_mesh("full_outer_inner_part_only.ply")
 #model_outer_pcd = o3d.io.read_point_cloud("full_outer_outer_part_only.ply")
-#model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_outer_part_only.ply")
-model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_treads_part_only.ply")
+model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_outer_part_only.ply")
+#model_outer_ply = o3d.t.io.read_triangle_mesh("full_outer_treads_part_only.ply")
 
 model_detailed_inner = o3d.io.read_point_cloud("4_row_model_HighPoly_Smoothed.ply")
-scale_new = 0.03912#0.03805#0.0378047581618546 #0.0376047581618546 
+scale_new = 0.03757452 #0.03912#0.03805#0.0378047581618546 #0.0376047581618546 
 scale_old = 0.019390745853434508
 
 #model_inner_pcd.scale(scale = scale_new, center = [0,0,0])
@@ -67,9 +67,12 @@ o3d.visualization.draw_geometries([model_inner_pcd.to_legacy()])
 start_points = model_inner_pcd.point.positions.numpy()
 normals = model_inner_pcd.point.normals.numpy()
 
+t1 = time.time()
 scene = o3d.t.geometry.RaycastingScene()
 #inner_id = scene.add_triangles(model_ply)
 outer_id = scene.add_triangles(model_outer_ply)
+t2 = time.time()    
+print("Add triangles",t2-t1)
 
 # Cast rays with offset
 offset_distance = 0.000000001 # small offset value
@@ -77,7 +80,12 @@ ray_origins_offset = start_points + offset_distance * (normals)
 ray_data = np.hstack((ray_origins_offset, normals))  
 
 ray_tensor = o3d.core.Tensor(ray_data, dtype=o3d.core.Dtype.Float32) 
-results = scene.cast_rays(ray_tensor)
+print(ray_tensor.shape)
+
+t3 = time.time()
+results = scene.cast_rays(ray_tensor[:100000,:])
+t4 = time.time()
+print("cast rays", t4 - t3)
 
 #hit = ((results['t_hit'].isfinite()) & (results['geometry_ids']==0)) & (results['t_hit'] < 0.1)
 hit =  (results['geometry_ids']==0) & (results['t_hit'] < 0.1)
@@ -102,9 +110,9 @@ ray_lines.lines = o3d.utility.Vector2iVector(lines)
 
 o3d.visualization.draw_geometries([pcd.to_legacy(),pcd1.to_legacy()])
 
-with open('inner_to_treads_correspondences.npy', 'wb') as f:
-    np.save(f, rays_hit_start)
-    np.save(f, rays_hit_end)
+# with open('inner_to_treads_correspondences.npy', 'wb') as f:
+#     np.save(f, rays_hit_start)
+#     np.save(f, rays_hit_end)
 
 # t0 = time.time()
 # with open('inner_to_outer_correspondences.npy', 'rb') as f:

@@ -18,6 +18,58 @@ class Viewer3D(object):
         self.main_vis.size_to_fit()
         app.add_window(self.main_vis)
 
+    def update_cloud(self, **geometries):
+        if self.first_cloud:
+            def add_first_cloud():
+                for n,g in geometries.items():
+                    self.main_vis.add_geometry(f'{n}', g)
+                # self.main_vis.reset_camera_to_default()
+                # self.main_vis.setup_camera(60,
+                #                            [0.07, 0.07, 0],
+                #                            [-0.1, -0.1, 0],
+                #                            [-1, 0, 0])
+
+            add_first_cloud()
+            for n,g in geometries.items():
+                self.main_vis.remove_geometry(f'{n}')
+            
+            self.first_cloud = False
+        else:
+            def update_with_cloud():
+                for n,g in geometries.items():
+                    self.main_vis.remove_geometry(f'{n}')
+                for n,g in geometries.items():
+                    print(f'{n}')
+                    self.main_vis.add_geometry(f'{n}', g)
+            
+            update_with_cloud()
+
+    # def update_cloud(self, *geometries):
+    #     if self.first_cloud:
+    #         def add_first_cloud():
+    #             for i,g in enumerate(geometries):
+    #                 self.main_vis.add_geometry(f'geo_{i}', g)
+    #             # self.main_vis.reset_camera_to_default()
+    #             # self.main_vis.setup_camera(60,
+    #             #                            [0.07, 0.07, 0],
+    #             #                            [-0.1, -0.1, 0],
+    #             #                            [-1, 0, 0])
+
+    #         add_first_cloud()
+    #         for i,g in enumerate(geometries):
+    #             self.main_vis.remove_geometry(f'geo_{i}')
+            
+    #         self.first_cloud = False
+    #     else:
+    #         def update_with_cloud():
+    #             for i,g in enumerate(geometries):
+    #                 self.main_vis.remove_geometry(f'geo_{i}')
+    #             for i,g in enumerate(geometries):
+    #                 print(f'geo_{i}')
+    #                 self.main_vis.add_geometry(f'geo_{i}', g)
+            
+    #         update_with_cloud()
+
     def tick(self):
         app = o3d.visualization.gui.Application.instance
         tick_return = app.run_one_tick()
@@ -25,29 +77,29 @@ class Viewer3D(object):
             self.main_vis.post_redraw()
         return tick_return
 
-    def update_cloud(self, geometries,lines):
-        if self.first_cloud:
-            def add_first_cloud():
-                self.main_vis.add_geometry(self.CLOUD_NAME, geometries)
-                self.main_vis.add_geometry(self.LINE_NAME, lines)
-                self.main_vis.reset_camera_to_default()
-                self.main_vis.setup_camera(60,
-                                           [0.07, 0.07, 0],
-                                           [-0.1, -0.1, 0],
-                                           [-1, 0, 0])
+    # def update_cloud(self, geometries,lines):
+    #     if self.first_cloud:
+    #         def add_first_cloud():
+    #             self.main_vis.add_geometry(self.CLOUD_NAME, geometries)
+    #             self.main_vis.add_geometry(self.LINE_NAME, lines)
+    #             self.main_vis.reset_camera_to_default()
+    #             self.main_vis.setup_camera(60,
+    #                                        [0.07, 0.07, 0],
+    #                                        [-0.1, -0.1, 0],
+    #                                        [-1, 0, 0])
 
-            add_first_cloud()
-            self.main_vis.remove_geometry(self.CLOUD_NAME)
-            self.main_vis.remove_geometry(self.LINE_NAME)
-            self.first_cloud = False
-        else:
-            def update_with_cloud():
-                self.main_vis.remove_geometry(self.CLOUD_NAME)
-                self.main_vis.remove_geometry(self.LINE_NAME)
-                self.main_vis.add_geometry(self.CLOUD_NAME, geometries)
-                self.main_vis.add_geometry(self.LINE_NAME, lines)
+    #         add_first_cloud()
+    #         self.main_vis.remove_geometry(self.CLOUD_NAME)
+    #         self.main_vis.remove_geometry(self.LINE_NAME)
+    #         self.first_cloud = False
+    #     else:
+    #         def update_with_cloud():
+    #             self.main_vis.remove_geometry(self.CLOUD_NAME)
+    #             self.main_vis.remove_geometry(self.LINE_NAME)
+    #             self.main_vis.add_geometry(self.CLOUD_NAME, geometries)
+    #             self.main_vis.add_geometry(self.LINE_NAME, lines)
                 
-            update_with_cloud()
+    #         update_with_cloud()
 
     # def update_cloud(self, g1, g2, g3, g4, g5):
     #     if self.first_cloud:
@@ -123,45 +175,45 @@ class Viewer3D(object):
     #         update_with_cloud()
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    def update_cloud(self, g1, g2, d1,d2, frame, vel_arrow):
-        if self.first_cloud:
-            def add_first_cloud():
-                self.main_vis.add_geometry("g1", g1)
-                self.main_vis.add_geometry("g2", g2)
-                self.main_vis.add_geometry("d1", d1)
-                self.main_vis.add_geometry("d2", d2)
-                self.main_vis.add_geometry("frame", frame)
-                self.main_vis.add_geometry("vel_arrow", vel_arrow)
-                # self.main_vis.reset_camera_to_default()
-                # self.main_vis.setup_camera(60,
-                #                            [0.07, 0.07, 0],
-                #                            [-0.1, -0.1, 0],
-                #                            [-1, 0, 0])
+    # def update_cloud(self, g1, g2, d1,d2, frame, vel_arrow):
+    #     if self.first_cloud:
+    #         def add_first_cloud():
+    #             self.main_vis.add_geometry("g1", g1)
+    #             self.main_vis.add_geometry("g2", g2)
+    #             self.main_vis.add_geometry("d1", d1)
+    #             self.main_vis.add_geometry("d2", d2)
+    #             self.main_vis.add_geometry("frame", frame)
+    #             self.main_vis.add_geometry("vel_arrow", vel_arrow)
+    #             # self.main_vis.reset_camera_to_default()
+    #             # self.main_vis.setup_camera(60,
+    #             #                            [0.07, 0.07, 0],
+    #             #                            [-0.1, -0.1, 0],
+    #             #                            [-1, 0, 0])
 
-            add_first_cloud()
-            self.main_vis.remove_geometry('g1')
-            self.main_vis.remove_geometry('g2')
-            self.main_vis.remove_geometry('d1')
-            self.main_vis.remove_geometry('d2')
-            self.main_vis.remove_geometry('frame')
-            self.main_vis.remove_geometry('vel_arrow')
-            self.first_cloud = False
-        else:
-            def update_with_cloud():
-                self.main_vis.remove_geometry('g1')
-                self.main_vis.remove_geometry('g2')
-                self.main_vis.remove_geometry('d1')
-                self.main_vis.remove_geometry('d2')
-                self.main_vis.remove_geometry('frame')
-                self.main_vis.remove_geometry('vel_arrow')
-                self.main_vis.add_geometry("g1", g1)
-                self.main_vis.add_geometry("g2", g2)
-                self.main_vis.add_geometry("d1", d1)
-                self.main_vis.add_geometry("d2", d2)
-                self.main_vis.add_geometry("frame", frame)
-                self.main_vis.add_geometry("vel_arrow", vel_arrow)
+    #         add_first_cloud()
+    #         self.main_vis.remove_geometry('g1')
+    #         self.main_vis.remove_geometry('g2')
+    #         self.main_vis.remove_geometry('d1')
+    #         self.main_vis.remove_geometry('d2')
+    #         self.main_vis.remove_geometry('frame')
+    #         self.main_vis.remove_geometry('vel_arrow')
+    #         self.first_cloud = False
+    #     else:
+    #         def update_with_cloud():
+    #             self.main_vis.remove_geometry('g1')
+    #             self.main_vis.remove_geometry('g2')
+    #             self.main_vis.remove_geometry('d1')
+    #             self.main_vis.remove_geometry('d2')
+    #             self.main_vis.remove_geometry('frame')
+    #             self.main_vis.remove_geometry('vel_arrow')
+    #             self.main_vis.add_geometry("g1", g1)
+    #             self.main_vis.add_geometry("g2", g2)
+    #             self.main_vis.add_geometry("d1", d1)
+    #             self.main_vis.add_geometry("d2", d2)
+    #             self.main_vis.add_geometry("frame", frame)
+    #             self.main_vis.add_geometry("vel_arrow", vel_arrow)
                 
-            update_with_cloud()
+    #         update_with_cloud()
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

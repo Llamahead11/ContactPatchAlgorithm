@@ -3,8 +3,8 @@ import open3d as o3d
 import numpy as np
 import csv
 import matplotlib
-matplotlib.use("Agg")
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+#matplotlib.use("Agg")
+#from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from capture_realsense_tensor import RealSenseManager
 from replay_realsense_tensor import read_RGB_D_folder
@@ -945,18 +945,22 @@ def main():
             gpu_curr = cv2.cuda.createGpuMatFromCudaMemory(rows = 480, cols = 848, type=cv2.CV_32FC3, cudaMemoryAddress=color_loop_ptr)
             gpu_curr_gray_uint8 = gpu_curr.convertTo(rtype=cv2.CV_8UC3, alpha=255.0)
             gpu_curr_gray = cv2.cuda.cvtColor(gpu_curr_gray_uint8, cv2.COLOR_BGR2GRAY)
+
             #frame_diff = cv2.cuda.absdiff(gpu_prev_gray, gpu_curr_gray)
             #print("Frame difference sum:", np.sum(frame_diff.download()))
             #print("prev_gray type:", gpu_prev_gray.type(), "size:", gpu_prev_gray.size())
             #print("curr_gray type:", gpu_curr_gray.type(), "size:", gpu_curr_gray.size())
 
             ## DENSE OPTICAL FLOW
-            
 
             frame_gpu, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = dense.detect2D(gpu_prev_gray, gpu_curr_gray)
+            
             bgr = dense.vis_hsv_2D()
-            traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5 = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
+            
+            map_x_gpu, map_y_gpu, traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5 = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
+            
             dense.track_3D_vel(time_ms)
+            
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Farne_opt_flow(gpu_prev_gray, gpu_curr_gray)
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Brox_optflow(gpu_prev_gray, gpu_curr_gray)
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Dense_pyrlk_opt_flow(gpu_prev_gray, gpu_curr_gray)
@@ -1009,6 +1013,30 @@ def main():
             # d3 = draw_lines(g3.point.positions.numpy(), g4.point.positions.numpy())
             # d4 = draw_lines(g4.point.positions.numpy(), g5.point.positions.numpy())
             # d4.paint_uniform_color(o3d.core.Tensor([1,0,0]))
+            x_points = map_x_gpu.download()
+            y_points = map_y_gpu.download()
+
+            mask = (x_points < 848) & (x_points > 0) & (y_points > 0) & (y_points < 480)
+            x_points = x_points[mask]
+            y_points = y_points[mask]
+
+            # Create 2D histogram
+            hist, xedges, yedges = np.histogram2d(x_points.ravel(), -y_points.ravel(), bins=(848,480))
+            hist[hist < 1] = -10
+            
+            
+            #Plot histogram (azimuth vs elevation)
+            plt.figure(figsize=(16, 8))
+            plt.imshow(hist.T, origin='lower', aspect='auto', vmin=-10, vmax=10) #,                         
+                    #extent=[-np.pi, np.pi, 0, np.pi])
+            plt.xlabel("x_track")
+            plt.ylabel("y_track")
+            plt.title("density track Histogram")
+            plt.colorbar(label="Count")
+            plt.savefig(f"track/{count:04d}.png")
+            plt.close()
+
+            print(x_points.ravel().shape)
 
             # g1,g2,g3,g4,g5,d1,d2,d3,d4 = dense.vis_3D()
             g1,g2,d1,d2,frame,vel_arrow = dense.vis_3D()
@@ -1020,6 +1048,7 @@ def main():
                 #viewer3d.update_cloud(d1=d1.cpu(),d2=d2.cpu(),d3=d3.cpu(),d4=d4.cpu(),g5=g5.cpu())
                 viewer3d.update_cloud(g1=g1.cpu(),g2=g2.cpu(),d1=d1.cpu(),d2=d2.cpu(), frame = frame.cpu(), vel_arrow = vel_arrow.cpu())   
                 viewer3d.tick()
+                #o3d.visualization.draw([g1.cpu(),g2.cpu(),d1.cpu(),d2.cpu()])
             t1 = time.time()
             print("APP:", t1-t0)
             
@@ -1056,9 +1085,11 @@ def main():
 
 
             frame = frame_gpu.download()
+            #valid_mask_cpu = valid_mask.download()
             # visualization for dense
             cv2.imshow("original", frame)
             cv2.imshow("result", bgr)
+            #cv2.imshow("valid points", valid_mask_cpu)
             key = cv2.waitKey(1)
             if key == ord('q'):
                 if view_video: viewer3d.stop()
@@ -1073,6 +1104,7 @@ def main():
     finally:
         if Real_Time: rsManager.stop()
         #if view_video: viewer3d.stop()
+        sys.exit()
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ import faiss
 import os
 from numba import njit
 import cupy as cp
+from optix_castrays import OptiXRaycaster
 
 plt.ioff() 
 
@@ -375,8 +376,8 @@ def ICP_register_T2Cam_with_model(mesh,cropped_model_cuda,t2cam_pcd_cuda,d_t2_po
     # reg_p2p = o3d.pipelines.registration.registration_icp(downsampled_t2cam_removed_def, downsampled_cropped_model.to_legacy(), max_correspondence_distance = 0.02,
     #                                                       estimation_method = o3d.pipelines.registration.TransformationEstimationPointToPlane(),
     #                                                       criteria = o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-8,relative_rmse=1.000000e-08,max_iteration=100))
-    reg_p2p = o3d.t.pipelines.registration.icp(source = downsampled_t2cam_removed_def,
-                                                target = downsampled_cropped_model_cu,
+    reg_p2p = o3d.t.pipelines.registration.icp(source = downsampled_t2cam_removed_def.uniform_down_sample(every_k_points=10),
+                                                target = downsampled_cropped_model_cu.uniform_down_sample(every_k_points=10),
                                                 max_correspondence_distance = 0.02,
                                                 estimation_method = o3d.t.pipelines.registration.TransformationEstimationPointToPlane(),
                                                 criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1.000000e-08, relative_rmse=1.000000e-08, max_iteration=100))
@@ -385,7 +386,7 @@ def ICP_register_T2Cam_with_model(mesh,cropped_model_cuda,t2cam_pcd_cuda,d_t2_po
     print(reg_p2p)
     print("Transformation is:")
     print(reg_p2p.transformation)
-
+    
     if draw_reg: draw_registration_result(t2cam_pcd_cuda,cropped_model_cuda,frame)
     t2cam_pcd_cuda.transform(reg_p2p.transformation)
     mesh.transform(reg_p2p.transformation)
@@ -432,7 +433,7 @@ def ICP_register_T2Cam_with_model(mesh,cropped_model_cuda,t2cam_pcd_cuda,d_t2_po
 #     print("APPEND",t2-t1)
 #     print("CAST",t3-t2)
 
-def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg):
+def inner_deformed_to_inner_undeformed(raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,mesh,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg):
     """
     Function to get the SIGNED corressponding distances between 
     the T2Cam Point Cloud and the Inner Tyre Model
@@ -456,8 +457,9 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     print("SEGMENT:", time_sec)
     t_s_begin = time.time()
     ## downsample t2cam and cropped model and store its respective points
-    downsampled_t2cam_cu = t2cam_pcd_cuda.uniform_down_sample(every_k_points=10)
-    downsampled_cropped_model_cu = cropped_model_cuda.uniform_down_sample(every_k_points=10)
+    downsampled_t2cam_cu = t2cam_pcd_cuda #.uniform_down_sample(every_k_points=10)
+    
+    downsampled_cropped_model_cu = cropped_model_cuda #.uniform_down_sample(every_k_points=10)
     #downsampled_t2cam = t2cam_pcd
     #downsampled_cropped_model = cropped_model_pcd
     d_t2_points = downsampled_t2cam_cu.point.positions #.numpy()
@@ -468,14 +470,33 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     ICP_register_T2Cam_with_model(mesh,cropped_model_cuda,t2cam_pcd_cuda,d_t2_points,downsampled_cropped_model_cu,draw_reg)
     
     ## downsample t2cam and cropped model and store its respective points
-    downsampled_t2cam_cu = t2cam_pcd_cuda.uniform_down_sample(every_k_points=10)
+    downsampled_t2cam_cu = t2cam_pcd_cuda #.uniform_down_sample(every_k_points=10)
     d_t2_points = downsampled_t2cam_cu.point.positions.cpu().numpy() #.numpy()
 
     
     print("BEGIN:", t_e_begin-t_s_begin)
+    cp.cuda.runtime.deviceSynchronize()
     ## CANT USE .compute_point_cloud_distance as it does not give vector distance
     #d_dist = np.asarray(t2cam_pcd.compute_point_cloud_distance(downsampled_cropped_model))
     #d_dist = np.asarray(downsampled_cropped_model.compute_point_cloud_distance(downsampled_t2cam))
+
+    ## OptiX ray tracing engine
+    start_cv21 = cv2.getTickCount()
+    
+    origins = cp.from_dlpack(t2cam_pcd_cuda.point.positions.clone().contiguous().to_dlpack())
+    directions = cp.from_dlpack(t2cam_pcd_cuda.point.normals.clone().contiguous().to_dlpack())
+
+    rays = cp.concatenate([origins, directions], axis=1) 
+    
+    hit_point, tri_id, t_hit = raycaster.cast(rays)
+    print(hit_point)
+    end_cv21 = cv2.getTickCount()
+    time_sec = (end_cv21-start_cv21)/cv2.getTickFrequency()
+    print("OptiX: ", time_sec)
+
+    r_pcd = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
+    r_pcd.point.positions = o3d.core.Tensor.from_dlpack(hit_point.toDlpack())
+    o3d.visualization.draw([r_pcd.cpu()])
 
     ## OPEN3D KDtree implementation needs for loop
     # t_s_o3d = time.time()
@@ -485,11 +506,11 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     # print("Open3D: ",t_e_o3d-t_s_o3d)
 
     ## SciPy cKDTree implementation 
-    t_s_scipy = time.time()
-    tree = cKDTree(d_t2_points)
-    _,idx = tree.query(d_model_points,1)
-    t_e_scipy = time.time()
-    print("SCIPY: ",t_e_scipy-t_s_scipy)
+    # t_s_scipy = time.time()
+    # tree = cKDTree(d_t2_points)
+    # _,idx = tree.query(d_model_points,1)
+    # t_e_scipy = time.time()
+    # print("SCIPY: ",t_e_scipy-t_s_scipy)
 
     ## FAISS 
     # t_s_faiss = time.time()
@@ -509,28 +530,46 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
 
     ## vector distance
     t_s = time.time()
-    dist = d_model_points - d_t2_points[idx]
+    # dist = d_model_points - d_t2_points[idx]
+    dist = hit_point - origins
     cp_dist = cp.asarray(dist)
     ## scalar distance
-    d_dist = cp.linalg.norm(cp_dist, axis=1)
+    d_dist = t_hit
+    # d_dist = cp.linalg.norm(cp_dist, axis=1)
     
-    ## normalised normals of model 
-    o3d_normals_undeformed = downsampled_cropped_model_cu.point.normals #.numpy()
-    dl_normals_undeformed = o3d_normals_undeformed.to_dlpack()
-    cp_normals_undeformed = cp.from_dlpack(dl_normals_undeformed)
-    cp_normals_undeformed /= cp.linalg.norm(cp_normals_undeformed, axis=1, keepdims=True) + 1e-8
+    # ## normalised normals of model 
+    # o3d_normals_undeformed = downsampled_cropped_model_cu.point.normals #.numpy()
+    # dl_normals_undeformed = o3d_normals_undeformed.to_dlpack()
+    # cp_normals_undeformed = cp.from_dlpack(dl_normals_undeformed)
+    # cp_normals_undeformed /= cp.linalg.norm(cp_normals_undeformed, axis=1, keepdims=True) + 1e-8
 
-    ## Calculated Signed Distance (dot of the vector distance and normal: if < 90 = 1 if > 90 = -1)
-    dot_product = (-1)*cp.sign(cp.sum(cp_dist * cp_normals_undeformed, axis=1))
-    d_dist = dot_product*d_dist
+    # ## Calculated Signed Distance (dot of the vector distance and normal: if < 90 = 1 if > 90 = -1)
+    # dot_product = (-1)*cp.sign(cp.sum(cp_dist * cp_normals_undeformed, axis=1))
+    # d_dist = dot_product*d_dist
 
     ## color correspodnece to signed distance according to 'plasma'
     d_colors = plt.get_cmap('plasma')(((d_dist - d_dist.min()) / (d_dist.max() - d_dist.min())).get())
     d_colors = d_colors[:, :3]
 
+    # mask_mid = (np.abs(d_model_points[:,2]-0.09) < 0.001) | (np.abs(d_model_points[:,2]-0.13) < 0.001) | (np.abs(d_model_points[:,2]-0.17) < 0.001)
+    # mask_mid_1 = (np.abs(d_t2_points[:,2]-0.09) < 0.001) | (np.abs(d_t2_points[:,2]-0.13) < 0.001) | (np.abs(d_t2_points[:,2]-0.17) < 0.001) 
+    # mask_lat = (np.abs(d_model_points[:,0]-0.04) < 0.001) | (np.abs(d_model_points[:,0]-0.0) < 0.001) | (np.abs(d_model_points[:,0]+0.04) < 0.001)
+    # mask_lat_1 = (np.abs(d_t2_points[:,0]-0.04) < 0.001) | (np.abs(d_t2_points[:,0]-0.0) < 0.001) | (np.abs(d_t2_points[:,0]+0.04) < 0.001)
+    # inner_arr.append(d_t2_points[mask_mid_1])
+    # inner_lat.append(d_t2_points[mask_lat_1])
+    # inner_undef.append(d_model_points[mask_mid])
+    # inner_undef_lat.append(d_model_points[mask_lat])
+    # t2_d_pcd_def = o3d.t.geometry.PointCloud(device = o3d.core.Device("CUDA:0"))
+    # t2_d_pcd_def.point.positions = downsampled_t2cam_cu.point.positions[mask_lat]
+    # t2_d_pcd_def.paint_uniform_color([1,1,0])
+
     # Create new pcd with color correspondence to deformation
+    # t2_d_pcd_cu = o3d.t.geometry.PointCloud(device = o3d.core.Device("CUDA:0"))
+    # t2_d_pcd_cu.point.positions = downsampled_cropped_model_cu.point.positions[mask_mid | mask_lat]
+    # t2_d_pcd_cu.point.colors = o3d.core.Tensor(d_colors[mask_mid | mask_lat]).cuda()
+
     t2_d_pcd_cu = o3d.t.geometry.PointCloud(device = o3d.core.Device("CUDA:0"))
-    t2_d_pcd_cu.point.positions = downsampled_cropped_model_cu.point.positions
+    t2_d_pcd_cu.point.positions = o3d.core.Tensor.from_dlpack(hit_point.toDlpack()) #downsampled_cropped_model_cu.point.positions
     t2_d_pcd_cu.point.colors = o3d.core.Tensor(d_colors).cuda()
     t_e = time.time()
     print("REST: ",t_e-t_s)
@@ -540,10 +579,11 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
 
     ## If want orthographic 3 graphs to be saved
     #figInner = vV.makeOrthoDeformationPlot(label = 'Inner', points=np.asarray(t2_d_pcd.points), dist = d_dist,vmin=-0.003,vmax=0.003)
-    
+    #cpu_dist = d_dist.get()
+    #mask = (cpu_dist > -0.02) & (cpu_dist < 0.02)
     ## Save Figure 
     t__0 = time.perf_counter()
-    #figInner,sc = vV.createOuterDeformationPlot(label = 'Inner', points=t2_d_pcd.point.positions.numpy(), dist = d_dist,vmin=-0.01,vmax=0.01)
+    #figInner,sc = vV.createOuterDeformationPlot(label = 'Inner', points=t2_d_pcd_cu.point.positions.cpu().numpy()[mask], dist = cpu_dist[mask],vmin=-0.01,vmax=0.01)
     #plt.savefig("./Inner_Deformation/{}.png".format(count))
     #plt.show()
     #save_quickly(figInner, "fast_image.png")
@@ -551,7 +591,7 @@ def inner_deformed_to_inner_undeformed(mesh,model_pcd_cuda,t2cam_pcd_cuda,count,
     #o3d.io.write_point_cloud("./Inner_Deformation/{}.pcd".format(count), t2_d_pcd)
     t__1 = time.perf_counter()
     print("Figure saving time: ",t__1-t__0)
-    return t2_d_pcd_cu, np.max(d_dist), downsampled_cropped_model_cu, d_dist
+    return t2_d_pcd_cu, np.max(d_dist), downsampled_cropped_model_cu, d_dist, 1#t2_d_pcd_def
 
 def run_vis_app(t2cam_pcd,cropped_model_pcd):
     '''
@@ -634,7 +674,7 @@ def load_outer_inner_corres(file_name):
         rays_hit_end_io = np.load(f)
     return rays_hit_start_io, rays_hit_end_io
 
-def projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_model_pcd_cu,d_dist,normals,t2_d_pcd_cu):
+def projectOuter(outer_undef_lat,outer_undef,outer_lat,outer_arr,count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_model_pcd_cu,d_dist,normals,t2_d_pcd_cu):
     '''
     Function to use inner_to_outer.npz correspondence and get the SIGNED corresponding distances between 
     the Outer Undeformed Model and the Projected Outer T2Cam  
@@ -660,6 +700,7 @@ def projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_mo
     '''
     t0 = time.time()
     cropped_points = cropped_model_pcd_cu.point.positions.cpu().numpy() #.numpy()
+    
 
     ## Finding index using np.where
     #idx = [np.where((rays_hit_start_io == xyz).all(axis=1))[0] for xyz in cropped_points]
@@ -690,10 +731,24 @@ def projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_mo
     d_colors_outer = plt.get_cmap('plasma')(((d_outer_dist - d_outer_dist.min()) / (d_outer_dist.max() - d_outer_dist.min())).get())
     d_colors_outer = d_colors_outer[:, :3]
 
+    mask_mid = (np.abs(model_outer_deformed_cu.point.positions.cpu().numpy()[:,2]-0.09) < 0.001) | (np.abs(model_outer_deformed_cu.point.positions.cpu().numpy()[:,2]-0.13) < 0.005) | (np.abs(model_outer_deformed_cu.point.positions.cpu().numpy()[:,2]-0.17) < 0.001) 
+    mask_lat = (np.abs(model_outer_deformed_cu.point.positions.cpu().numpy()[:,0]-0.04) < 0.001) | (np.abs(model_outer_deformed_cu.point.positions.cpu().numpy()[:,0]-0.0) < 0.001) | (np.abs(model_outer_deformed_cu.point.positions.cpu().numpy()[:,0]+0.04) < 0.001)
+    mask_mid_1 = (np.abs(model_outer_undeformed_cu.point.positions.cpu().numpy()[:,2]-0.09) < 0.001) | (np.abs(model_outer_undeformed_cu.point.positions.cpu().numpy()[:,2]-0.13) < 0.005) | (np.abs(model_outer_undeformed_cu.point.positions.cpu().numpy()[:,2]-0.17) < 0.001) 
+    mask_lat_1 = (np.abs(model_outer_undeformed_cu.point.positions.cpu().numpy()[:,0]-0.04) < 0.001) | (np.abs(model_outer_undeformed_cu.point.positions.cpu().numpy()[:,0]-0.0) < 0.001) | (np.abs(model_outer_undeformed_cu.point.positions.cpu().numpy()[:,0]+0.04) < 0.001)
+                #0.12
+    outer_arr.append(model_outer_deformed_cu.point.positions.cpu().numpy()[mask_mid])
+    outer_lat.append(model_outer_deformed_cu.point.positions.cpu().numpy()[mask_lat])
+    outer_undef.append(model_outer_undeformed_cu.point.positions.cpu().numpy()[mask_mid_1])
+    outer_undef_lat.append(model_outer_undeformed_cu.point.positions.cpu().numpy()[mask_lat_1])
+
     # Create colormapped PointCloud
     t2_d_pcd_outer_cu = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
-    t2_d_pcd_outer_cu.point.positions = model_outer_deformed_cu.point.positions
-    t2_d_pcd_outer_cu.point.colors = o3d.core.Tensor(d_colors_outer).cuda()
+    t2_d_pcd_outer_cu.point.positions = model_outer_undeformed_cu.point.positions[mask_mid_1 | mask_lat_1]
+    t2_d_pcd_outer_cu.point.colors = o3d.core.Tensor(d_colors_outer[mask_mid_1 | mask_lat_1]).cuda()
+
+    # t2_d_pcd_outer_cu = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
+    # t2_d_pcd_outer_cu.point.positions = model_outer_deformed_cu.point.positions
+    # t2_d_pcd_outer_cu.point.colors = o3d.core.Tensor(d_colors_outer).cuda()
 
     t1 = time.time()
     print(t1-t0)
@@ -706,10 +761,11 @@ def projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_mo
 
     # CREATE ORTHOGRAPHIC Fig for 3 views of Outer Deformation
     #figOuter = vV.makeOrthoDeformationPlot(label = 'Outer', points=np.asarray(t2_d_pcd_outer.points), dist = d_outer_dist,vmin=-0.003,vmax=0.003)
-    
+    # cpu_dist = d_dist.get()
+    # mask = (cpu_dist > -0.02) & (cpu_dist < 0.02)
     #Save Fig
     t__0 = time.perf_counter()
-    #figOuter,sc = vV.createOuterDeformationPlot(label = 'Outer', points=t2_d_pcd_outer.point.positions.numpy(), dist = d_outer_dist,vmin=-0.01,vmax=0.01)
+    #figOuter,sc = vV.createOuterDeformationPlot(label = 'Outer', points=t2_d_pcd_outer_cu.point.positions.cpu().numpy()[mask], dist = cpu_dist[mask],vmin=-0.01,vmax=0.01)
     #vV.updateScatterPlot(sc, np.asarray(t2_d_pcd_outer.points), d_outer_dist)
     #plt.savefig("./Outer_Deformation/{}.png".format(count))
     #plt.show()
@@ -822,7 +878,7 @@ def main():
     ## CREATE INNER MODEL PCD from CORRES
     #model_pcd = load_model_pcd(file_path_model,scale)
     model_pcd = o3d.t.geometry.PointCloud()
-    model_pcd.point.positions = o3d.core.Tensor(rays_hit_start_io)
+    model_pcd.point.positions = o3d.core.Tensor(rays_hit_start_io) #[np.abs(rays_hit_start_io[:,2]-0.15) < 0.001]
     rays_hit_start_io_cu = o3d.core.Tensor(rays_hit_start_io).cuda()
     rays_hit_end_io_cu = o3d.core.Tensor(rays_hit_end_io).cuda()
     model_pcd.estimate_normals()
@@ -834,6 +890,11 @@ def main():
     model_tread_pcd = load_model_pcd(file_path_tread,scale)
     normals_model_pcd = model_pcd.point.normals.cuda()
     normals_tread_pcd = np.asarray(model_tread_pcd.normals)
+    
+    model_ply_outer = load_model_pcd("full_outer_outer_part_only.ply",scale)
+    # model_pcd = o3d.t.geometry.PointCloud()
+    # model_pcd.point.positions = o3d.core.Tensor(rays_hit_start_io)
+   
 
     ## FIND PCD INDICES OF APRILTAG LOCATIONS 
     tag_norm, model_correspondence = find_tag_point_ID_correspondence(model_pcd_cuda, m_points)
@@ -873,6 +934,16 @@ def main():
 
     load_time = time.time() - start_time
     print("Loading Completed in",load_time)
+    inner_arr = []
+    outer_arr = []
+    inner_lat = []
+    outer_lat = []
+    inner_undef = []
+    inner_undef_lat = []
+    outer_undef = []
+    outer_undef_lat = []
+
+    raycaster = OptiXRaycaster("full_outer_inner_part_only.ply", "raycast.cu")
 
     ## LOOP THROUGH EACH FRAME
     try:
@@ -938,21 +1009,26 @@ def main():
 
             ## INNER SIGNED DISTANCE DEFORMATION CALCULATION WITH REFINED ICP REGISTRATION
             #inner_deformed_to_inner_undeformed(t2cam_ply, model_pcd_cuda,t2cam_pcd_cuda,count,t2cam_pcd,model_pcd,model_ply,draw_reg)
-            t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist = inner_deformed_to_inner_undeformed(t2cam_ply,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg)
+
+            t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist,t2_cam_pcd_vis = inner_deformed_to_inner_undeformed(raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,t2cam_ply,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg)
             time_at_Inner_c2c = time.time()
             c2c_dist_time = time_at_Inner_c2c - time_at_registration
             print("Inner C2C distance calculated in", c2c_dist_time)
+            #o3d.visualization.draw([model_ply, t2_d_pcd_inner_cu,t2cam_pcd_cuda, t2_cam_pcd_vis])
 
             # ## OUTER TREAD DEFORMATION
-            t2_d_pcd_outer_cu, max_outer_def, cropped_model_pcd_cu, d_outer_dist, model_outer_deformed,model_outer_undeformed,d_outer_colors = projectOuter(count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_model_pcd_cu,d_inner_dist,normals_model_pcd,t2_d_pcd_inner_cu)
+            # t2_d_pcd_outer_cu, max_outer_def, cropped_model_pcd_cu, d_outer_dist, model_outer_deformed,model_outer_undeformed,d_outer_colors = projectOuter(outer_undef_lat,outer_undef,outer_lat,outer_arr,count,kdtree,rays_hit_start_io_cu,rays_hit_end_io_cu,cropped_model_pcd_cu,d_inner_dist,normals_model_pcd,t2_d_pcd_inner_cu)
             time_at_Outer_c2c = time.time()
             c2c_dist_time = time_at_Outer_c2c - time_at_Inner_c2c
             print("Outer C2C distance calculated in", c2c_dist_time)
             # #o3d.visualization.draw_geometries([t2cam_dist_pcd])
 
+            # = t2cam_pcd_cuda.point.positions.cpu().numpy()
             ## UPDATE VIEWER
+            #o3d.visualization.draw([model_ply_outer, t2_d_pcd_inner_cu,t2cam_pcd_cuda, t2_cam_pcd_vis, t2_d_pcd_inner_cu.cpu(),t2_d_pcd_outer_cu.cpu()])
             if view_video:
-                viewer3d.update_cloud(geometries = t2_d_pcd_inner_cu.cpu(),lines = t2_d_pcd_outer_cu.cpu())
+                # viewer3d.update_cloud(geometries = t2_d_pcd_inner_cu.cpu(),lines = t2_d_pcd_outer_cu.cpu())
+                viewer3d.update_cloud(geometries = t2_d_pcd_inner_cu.cpu(),lines = t2cam_pcd_cuda.cpu())
                 viewer3d.tick()
             time_at_app_view = time.time()
             app_view_time = time_at_app_view - time_at_Outer_c2c
@@ -992,7 +1068,67 @@ def main():
 
     finally:
         if Real_Time: rsManager.stop()
+        # inner_arr = np.array(inner_arr)
+        # outer_arr = np.array(outer_arr)
+        # with open('cross_section.npy', 'wb') as f:
+        #     np.save(f, inner_arr)
+        #     np.save(f, outer_arr)
+        
         #if view_video: viewer3d.stop()
+        max_len = 4000
+        uniform_inner_arr = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in inner_arr
+        ])
+
+        uniform_outer_arr = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in outer_arr
+        ])
+
+        max_len = 4000
+        uniform_inner_lat = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in inner_lat
+        ])
+
+        uniform_outer_lat = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in outer_lat
+        ])
+
+        max_len = 4000
+        uniform_inner_arr_un = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in inner_undef
+        ])
+
+        uniform_outer_arr_un = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in outer_undef
+        ])
+
+        max_len = 4000
+        uniform_inner_lat_un = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in inner_undef_lat
+        ])
+
+        uniform_outer_lat_un = np.array([
+            np.pad(a, ((0, max_len - a.shape[0]), (0, 0))) if a.shape[0] < max_len else a[:max_len]
+            for a in outer_undef_lat
+        ])
+
+        # np.save('inner_arr.npy', uniform_inner_arr)
+        # np.save('outer_arr.npy', uniform_outer_arr)
+        # np.save('inner_lat.npy', uniform_inner_lat)
+        # np.save('outer_lat.npy', uniform_outer_lat)
+        # np.save('inner_arr_un.npy', uniform_inner_arr_un)
+        # np.save('outer_arr_un.npy', uniform_outer_arr_un)
+        # np.save('inner_lat_un.npy', uniform_inner_lat_un)
+        # np.save('outer_lat_un.npy', uniform_outer_lat_un)
+
+
 
 
 if __name__ == "__main__":

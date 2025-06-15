@@ -98,8 +98,8 @@ class read_RGB_D_folder:
         self.index += 1
         depth_scale = 1/0.0001
        
-        filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 10, dist_sigma = 20.0)
-        vertex_map =filtered_depth.create_vertex_map(self.intrinsic)
+        #filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 10, dist_sigma = 20.0)
+        vertex_map = current_depth_cuda.create_vertex_map(self.intrinsic)
         normal_map = vertex_map.create_normal_map()
 
         pcd_cuda = o3d.t.geometry.PointCloud(self.cu)
@@ -142,7 +142,7 @@ class read_RGB_D_folder:
 
         #o3d.visualization.draw_geometries([mesh.to_legacy()])
         #mesh_cpu = mesh.cpu()
-
+       
         return self.index, current_depth_np, current_color_cuda , pcd_cuda, vertex_map, normal_map
 
 @numba.jit(nopython=True)
