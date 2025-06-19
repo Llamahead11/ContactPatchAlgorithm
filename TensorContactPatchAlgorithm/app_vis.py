@@ -39,7 +39,6 @@ class Viewer3D(object):
                 for n,g in geometries.items():
                     self.main_vis.remove_geometry(f'{n}')
                 for n,g in geometries.items():
-                    print(f'{n}')
                     self.main_vis.add_geometry(f'{n}', g)
             
             update_with_cloud()
