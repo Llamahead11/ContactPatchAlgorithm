@@ -59,6 +59,8 @@ Desktop.ini
 
 # Log files
 *.log
+*.sqlite
+*.nsys-rep
 
 # Photos (in a folder named 'photos')
 TensorContactPatchAlgorithm/Farne_video/
@@ -67,6 +69,8 @@ TensorContactPatchAlgorithm/Outer_Deformation/
 TensorContactPatchAlgorithm/realsense2/
 TensorContactPatchAlgorithm/SIFT_video/
 TensorContactPatchAlgorithm/test1/
+TensorContactPatchAlgorithm/track/
+TensorContactPatchAlgorithm/hist/
 
 ContactPatchAlgorithm/Farne_video/
 ContactPatchAlgorithm/Farne_video - Copy/
