@@ -918,6 +918,8 @@ def main():
     # traj_motion_3D_3.upload(vertex_map_np)
     # traj_motion_3D_4.upload(vertex_map_np)
     # traj_motion_3D_5.upload(vertex_map_np)
+
+    prev_mask = np.ones((480,848), dtype=bool)
     
     ## LOOP THROUGH EACH FRAME 1 onwards
     #==========================================================================================================================================================================
@@ -982,9 +984,9 @@ def main():
             ## VIS
             #bgr = vis_2D_flow_hsv(gpu_magnitude, gpu_angle,gpu_hsv_8u,gpu_hsv,gpu_h,gpu_s,gpu_v)
             #bgr = vis_2D_flow_vec(color_image,gpu_status,gpu_prev_p,gpu_next_p)
-
+            
             #traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5= to_3D_disp(count, vertex_map_gpu_prev, vertex_map_prev, vertex_map_gpu, vertex_map_np, normal_map_prev, normal_map_np, gpu_flow_x, gpu_flow_y,traj_motion_2D_x, traj_motion_2D_y, traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5)
-
+            
             # g1_p = traj_motion_3D_1.download()
             # g1 = o3d.t.geometry.PointCloud()
             # g1.point.positions = o3d.core.Tensor(g1_p.reshape(-1,3),dtype=o3d.core.float32)
@@ -1016,27 +1018,38 @@ def main():
             x_points = map_x_gpu.download()
             y_points = map_y_gpu.download()
 
-            mask = (x_points < 848) & (x_points > 0) & (y_points > 0) & (y_points < 480)
+            mask = (x_points <= 848 - 1) & (y_points <= 480-1) & (x_points >= 0+1) & (y_points >= 0+1)
+
+            #now create a border to indicate lost tracks that will clump into regions
+
+            # how to reseed tracks correctly
+            #now get the indices of those points lost and reinitialise with the INTERPOLATED VALUE of those neighbouring points of the index lost?
+            #                 
             x_points = x_points[mask]
             y_points = y_points[mask]
 
-            # Create 2D histogram
-            hist, xedges, yedges = np.histogram2d(x_points.ravel(), -y_points.ravel(), bins=(848,480))
-            hist[hist < 1] = -10
-            
-            
-            #Plot histogram (azimuth vs elevation)
-            plt.figure(figsize=(16, 8))
-            plt.imshow(hist.T, origin='lower', aspect='auto', vmin=-10, vmax=10) #,                         
-                    #extent=[-np.pi, np.pi, 0, np.pi])
-            plt.xlabel("x_track")
-            plt.ylabel("y_track")
-            plt.title("density track Histogram")
-            plt.colorbar(label="Count")
-            plt.savefig(f"track/{count:04d}.png")
-            plt.close()
+            curr_mask = mask & prev_mask
 
-            print(x_points.ravel().shape)
+            xy_pixels = np.argwhere(curr_mask)
+             
+
+            # Create 2D histogram
+            # hist, xedges, yedges = np.histogram2d(x_points.ravel(), -y_points.ravel(), bins=(848,480))
+            # hist[hist < 1] = -10
+            
+            
+            # #Plot histogram (azimuth vs elevation)
+            # plt.figure(figsize=(16, 8))
+            # plt.imshow(hist.T, origin='lower', aspect='auto', vmin=-10, vmax=10) #,                         
+            #         #extent=[-np.pi, np.pi, 0, np.pi])
+            # plt.xlabel("x_track")
+            # plt.ylabel("y_track")
+            # plt.title("density track Histogram")
+            # plt.colorbar(label="Count")
+            # plt.savefig(f"track/{count:04d}.png")
+            # plt.close()
+
+            # print(x_points.ravel().shape)
 
             # g1,g2,g3,g4,g5,d1,d2,d3,d4 = dense.vis_3D()
             g1,g2,d1,d2,frame,vel_arrow = dense.vis_3D()
@@ -1086,10 +1099,13 @@ def main():
 
             frame = frame_gpu.download()
             #valid_mask_cpu = valid_mask.download()
+            valid_image = np.zeros((480, 848), dtype=np.uint8)
+            valid_image[curr_mask] = 255
+            prev_mask = curr_mask
             # visualization for dense
             cv2.imshow("original", frame)
             cv2.imshow("result", bgr)
-            #cv2.imshow("valid points", valid_mask_cpu)
+            cv2.imshow("valid points", valid_image)
             key = cv2.waitKey(1)
             if key == ord('q'):
                 if view_video: viewer3d.stop()

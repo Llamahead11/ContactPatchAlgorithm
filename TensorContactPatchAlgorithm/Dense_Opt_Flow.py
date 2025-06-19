@@ -126,6 +126,7 @@ class DenseOptFlow:
         self.prev_traj_motion_3D = cp.empty((self.height,self.width,3), dtype=np.float32)
 
         self.curr_normal_3D = cp.empty((self.height,self.width,3), dtype=np.float32)
+        self.prev_normal_3D = cp.empty((self.height,self.width,3), dtype=np.float32)
 
         self.g1 = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
         self.g2 = o3d.t.geometry.PointCloud(o3d.core.Device("CUDA:0"))
@@ -163,9 +164,17 @@ class DenseOptFlow:
         # mask_invalid_points = cv2.cuda.GpuMat(rows = self.height, cols = self.width,type = cv2.CV_8U)
         # mask_invalid_points.upload(np_mask_invalid_points)
 
-        # self.border_h_max = self.gpu_scalar_mat_like(self.traj_motion_2D_x, self.height - border)
-        # self.border_hw_min = self.gpu_scalar_mat_like(self.traj_motion_2D_x, border)
-        # self.border_w_max = self.gpu_scalar_mat_like(self.traj_motion_2D_x, self.width - border)
+        self.gpu_zero = cv2.cuda_GpuMat(self.gpu_flow_x.size(), self.gpu_flow_x.type())
+        self.gpu_zero.setTo(0)
+
+        self.gpu_max_x = cv2.cuda_GpuMat(self.gpu_flow_x.size(), self.gpu_flow_x.type())
+        self.gpu_max_x.setTo(self.width)
+
+        self.gpu_max_y = cv2.cuda_GpuMat(self.gpu_flow_y.size(), self.gpu_flow_y.type())
+        self.gpu_max_y.setTo(self.height)
+
+        self.map_x_gpu_low = cv2.cuda.GpuMat(self.gpu_flow_x.size(), self.gpu_flow_x.type())
+        self.map_y_gpu_low = cv2.cuda.GpuMat(self.gpu_flow_y.size(), self.gpu_flow_y.type())
 
         self.prev_valid_mask = cv2.cuda.GpuMat(rows = self.height, cols = self.width,type= cv2.CV_8U)
 
@@ -199,13 +208,12 @@ class DenseOptFlow:
             self.dense_flow.calc(
                 gpu_prev_gray, gpu_curr_gray, self.gpu_flow, None
             )
-
+        #clip between 0 H W
         cv2.cuda.split(self.gpu_flow, [self.gpu_flow_x, self.gpu_flow_y])
 
         self.gpu_magnitude, self.gpu_angle = cv2.cuda.cartToPolar(
             self.gpu_flow_x, self.gpu_flow_y, angleInDegrees=True,
         )
-        print("test")
 
         #frame = gpu_curr_gray.download()
         return gpu_curr_gray, self.gpu_magnitude, self.gpu_angle,self.gpu_flow_x, self.gpu_flow_y
@@ -237,7 +245,7 @@ class DenseOptFlow:
     
     def init_disp(self, vertex_map_gpu):
         dl_vertex_map = vertex_map_gpu.as_tensor().clone().to_dlpack()
-        self.prev_traj_motion_3D = cp.from_dlpack(dl_vertex_map)
+        self.prev_traj_motion_3D = cp.ascontiguousarray(cp.from_dlpack(dl_vertex_map))
 
     def gpu_scalar_mat_like(self,reference_gpu_mat, value):
             size = reference_gpu_mat.size()  # (width, height)
@@ -266,17 +274,23 @@ class DenseOptFlow:
         interp_flow_y = cv2.cuda.remap(self.gpu_flow_y, self.traj_motion_2D_x, self.traj_motion_2D_y, interpolation=cv2.INTER_LINEAR)
 
         # calc the next 2D trajectory 
-        map_x_gpu = cv2.cuda.add(self.traj_motion_2D_x,interp_flow_x)
-        map_y_gpu = cv2.cuda.add(self.traj_motion_2D_y,interp_flow_y)
+        map_x_gpu_unclamped = cv2.cuda.add(self.traj_motion_2D_x,interp_flow_x)
+        map_y_gpu_unclamped = cv2.cuda.add(self.traj_motion_2D_y,interp_flow_y)
 
-        x_valid = cv2.cuda.inRange(map_x_gpu, lowerb = 30 , upperb = self.width - 30)
-        y_valid = cv2.cuda.inRange(map_y_gpu, lowerb = 30 , upperb = self.height - 30)
+        cv2.cuda.min(src1 = map_x_gpu_unclamped, src2 = self.gpu_max_x, dst = self.map_x_gpu_low)
+        map_x_gpu = cv2.cuda.max(self.map_x_gpu_low, self.gpu_zero)  
 
-        curr_valid_mask = cv2.cuda.bitwise_and(x_valid,y_valid)
+        cv2.cuda.min(src1 = map_y_gpu_unclamped, src2 = self.gpu_max_y, dst = self.map_y_gpu_low)
+        map_y_gpu = cv2.cuda.max(self.map_y_gpu_low, self.gpu_zero)
 
-        #use prev valid mask and bitwise_or?
-        valid_mask = cv2.cuda.bitwise_and(self.prev_valid_mask, curr_valid_mask)
-        self.prev_valid_mask = curr_valid_mask.clone()
+        # x_valid = cv2.cuda.inRange(map_x_gpu, lowerb = 30 , upperb = self.width - 30)
+        # y_valid = cv2.cuda.inRange(map_y_gpu, lowerb = 30 , upperb = self.height - 30)
+
+        # curr_valid_mask = cv2.cuda.bitwise_and(x_valid,y_valid)
+
+        # #use prev valid mask and bitwise_or?
+        # valid_mask = cv2.cuda.bitwise_and(self.prev_valid_mask, curr_valid_mask)
+        # self.prev_valid_mask = curr_valid_mask.clone()
         
         dl_vertex_map_curr = vertex_map_gpu_curr.as_tensor().to_dlpack()
         dl_normal_map_curr = normal_map_gpu_curr.as_tensor().to_dlpack()
@@ -324,9 +338,9 @@ class DenseOptFlow:
         # valid_mask_cpu = valid_mask.download()
         # print(np.count_nonzero(valid_mask_cpu))
 
-        # #assign next 2D traj
-        # self.traj_motion_2D_x = map_x_gpu.clone()  
-        # self.traj_motion_2D_y = map_y_gpu.clone() 
+        #assign next 2D traj
+        self.traj_motion_2D_x = map_x_gpu.clone()  
+        self.traj_motion_2D_y = map_y_gpu.clone() 
 
         # buffer_idx = count % 5
         # if buffer_idx == 0:
@@ -524,16 +538,23 @@ class DenseOptFlow:
 
     def vis_3D(self):
         prev = self.prev_traj_motion_3D
+        prev_n = self.prev_normal_3D
         curr = self.curr_traj_motion_3D
+        curr_n = self.curr_normal_3D
         vel = self.point_vel_wrt_cam_gpu
         local_vel = self.local_point_velocities_gpu
         local_disp = self.local_point_displacements_gpu.copy()
         
         g1_p = prev.reshape(-1,3).toDlpack()
+        g1_n = prev_n.reshape(-1,3).toDlpack()
         self.g1.point.positions = o3d.core.Tensor.from_dlpack(g1_p)
+        self.g1.point.normals = o3d.core.Tensor.from_dlpack(g1_n)
         g1d = self.g1.uniform_down_sample(every_k_points = 20)
         g2_p = curr.reshape(-1,3).toDlpack()
+        g2_n = curr_n.reshape(-1,3).toDlpack()
         self.g2.point.positions = o3d.core.Tensor.from_dlpack(g2_p)
+        self.g2.point.normals = o3d.core.Tensor.from_dlpack(g2_n)
+        curr_outer_pcd = self.g2.clone()
         g2d = self.g2.uniform_down_sample(every_k_points = 20)
         draw_lines(prev, curr, self.d1, local_disp)
         #self.d1.paint_uniform_color(o3d.core.Tensor([0,1,0]))
@@ -556,10 +577,11 @@ class DenseOptFlow:
         #print(self.mean_local_point_velocities_gpu)
         draw_simple_lines(cp.array([0,0,0]),self.mean_local_point_velocities_gpu,self.vel_arrow)
         self.prev_traj_motion_3D = self.curr_traj_motion_3D.copy()
+        self.prev_normal_3D = self.curr_normal_3D.copy()
         self.cv2_vertex_map_gpu_prev = self.cv2_vertex_map_gpu_curr.clone()
         self.mesh_prev = self.mesh_curr
         
-        return g1d,g2d,self.d1,self.d2,frame, self.vel_arrow
+        return g1d,g2d,self.d1,self.d2,frame, self.vel_arrow, curr_outer_pcd
         #return g1d,g2d,self.d1,self.d2,frame, self.vel_arrow
         #return g1d,g2d,self.d1,self.d2, self.d3,self.d4, frame, self.vel_arrow
 
@@ -621,7 +643,7 @@ def draw_lines(start_points, end_points, line_set,local):
     # line_points = np.vstack((start_points, end_points))
     valid_start = ((line_start[:,2] <= 1) & (line_start[:,2] >= 0.07)) 
     valid_end = ((line_end[:,2] <= 1) & (line_end[:,2] >= 0.07))
-    valid_dist = dist < 0.006
+    valid_dist = dist < 0.6
     mask = valid_start & valid_end & valid_dist
     
     # Replace invalid start points with corresponding end points

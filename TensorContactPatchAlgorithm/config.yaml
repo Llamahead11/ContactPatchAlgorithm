@@ -1,5 +1,5 @@
 # GENERAL SPECIFICATIONS
-Real_Time: True
+Real_Time: False
 Run_on_Jetson: False
 
 #DEBUG
