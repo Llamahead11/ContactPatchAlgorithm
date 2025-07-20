@@ -170,13 +170,14 @@ class OptiXRaycaster:
         return optix.deviceContextCreate( cu_ctx, ctx_options )
 
     def _load_mesh_to_gpu(self, ply_path):
-        pcd = o3d.t.io.read_point_cloud(ply_path)
-        pcd.scale(scale = 0.03912, center = [0,0,0])
-        pcd.estimate_normals()
-        pcd.orient_normals_consistent_tangent_plane(k = 10)
+        # pcd = o3d.t.io.read_point_cloud(ply_path)
+        # pcd.scale(scale = 0.03912, center = [0,0,0])
+        # pcd.estimate_normals()
+        # pcd.orient_normals_consistent_tangent_plane(k = 10)
+        normals = o3d.core.Tensor.load('inner_normals_oriented.npy')
         mesh = o3d.t.io.read_triangle_mesh(ply_path)
         mesh.scale(scale = 0.03912, center = [0,0,0])
-        mesh.vertex.normals = pcd.point.normals
+        mesh.vertex.normals = normals #pcd.point.normals
         #mesh.compute_vertex_normals()
         mesh.compute_triangle_normals()
         mesh.normalize_normals()

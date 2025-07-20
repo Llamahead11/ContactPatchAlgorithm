@@ -86,10 +86,11 @@ def save_time(filename,time):
         np.save(f, time)
 
 if __name__ == "__main__":
-    depth_num = 0
-    color_num = 0
+    depth_num = 3 #0
+    color_num = 18 #0
     data_path = "../DATA"
-    path_output = join(data_path,"test_eg_horizontal_10mm_disp_no_slip_d{}_c{}".format(depth_num,color_num))  # ../ for parent directory, ./ for current directory
+    path_output = join(data_path,"unseated_test_1_d{}_c{}".format(depth_num,color_num))  # ../ for parent directory, ./ for current directory
+    #test_eg_horizontal_10mm_disp_no_slip
     path_depth = join(path_output,"depth")
     path_color = join(path_output,"color")  
 
@@ -121,8 +122,8 @@ if __name__ == "__main__":
 
     # Using preset HighAccuracy for recording
     depth_sensor.set_option(rs.option.visual_preset, Preset.HighAccuracy)
-    depth_sensor.set_option(rs.option.exposure,6000)
-    depth_sensor.set_option(rs.option.gain, 48)
+    depth_sensor.set_option(rs.option.exposure,3000)
+    depth_sensor.set_option(rs.option.gain, 220)
     # depth_sensor.set_option(rs.option.depth_units,0.001)
     # Getting the depth sensor's depth scale (see rs-align example for explanation)
     depth_scale = depth_sensor.get_depth_scale()
@@ -164,8 +165,8 @@ if __name__ == "__main__":
             if not aligned_depth_frame or not color_frame:
                 continue
 
-            depth_image = np.asanyarray(aligned_depth_frame.get_data()).astype(np.float32)
-            color_image = np.asanyarray(color_frame.get_data()).astype(np.float32)
+            depth_image = np.asanyarray(aligned_depth_frame.get_data()).astype(np.float32) / 10000
+            color_image = np.asanyarray(color_frame.get_data()).astype(np.float32) / 255
             key = cv2.waitKey(1)
             #and key == ord('p')
 
@@ -175,9 +176,9 @@ if __name__ == "__main__":
                     color_frame)
                 
             cv2.imwrite("%s/%06d.png" % \
-                    (path_depth, frame_count), depth_image)
+                    (path_depth, frame_count), np.asanyarray(aligned_depth_frame.get_data()))
             cv2.imwrite("%s/%06d.jpg" % \
-                    (path_color, frame_count), color_image)
+                    (path_color, frame_count), np.asanyarray(color_frame.get_data()))
             print("Saved color + depth image %06d" % frame_count)
             frame_count += 1
 

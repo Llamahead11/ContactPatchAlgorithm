@@ -1052,7 +1052,7 @@ def main():
             # print(x_points.ravel().shape)
 
             # g1,g2,g3,g4,g5,d1,d2,d3,d4 = dense.vis_3D()
-            g1,g2,d1,d2,frame,vel_arrow = dense.vis_3D()
+            g1,g2,d1,d2,frame,vel_arrow, curr_outer_pcd = dense.vis_3D()
 
             #g1,g2,g3,g4,g5,d1,d2,d3,d4 = sparse.vis_3D()
 

@@ -4,7 +4,7 @@ Run_on_Jetson: False
 
 #DEBUG
 debug_mode: False
-view_video: False
+view_video: True
 draw_reg: False
 
 #MODEL SPECIFICATIONS

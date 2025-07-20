@@ -549,11 +549,13 @@ class DenseOptFlow:
         g1_n = prev_n.reshape(-1,3).toDlpack()
         self.g1.point.positions = o3d.core.Tensor.from_dlpack(g1_p)
         self.g1.point.normals = o3d.core.Tensor.from_dlpack(g1_n)
+        self.g1.paint_uniform_color(o3d.core.Tensor([0,0,0]))
         g1d = self.g1.uniform_down_sample(every_k_points = 20)
         g2_p = curr.reshape(-1,3).toDlpack()
         g2_n = curr_n.reshape(-1,3).toDlpack()
         self.g2.point.positions = o3d.core.Tensor.from_dlpack(g2_p)
         self.g2.point.normals = o3d.core.Tensor.from_dlpack(g2_n)
+        self.g2.paint_uniform_color(o3d.core.Tensor([0,0,0]))
         curr_outer_pcd = self.g2.clone()
         g2d = self.g2.uniform_down_sample(every_k_points = 20)
         draw_lines(prev, curr, self.d1, local_disp)
@@ -579,7 +581,7 @@ class DenseOptFlow:
         self.prev_traj_motion_3D = self.curr_traj_motion_3D.copy()
         self.prev_normal_3D = self.curr_normal_3D.copy()
         self.cv2_vertex_map_gpu_prev = self.cv2_vertex_map_gpu_curr.clone()
-        self.mesh_prev = self.mesh_curr
+        #self.mesh_prev = self.mesh_curr
         
         return g1d,g2d,self.d1,self.d2,frame, self.vel_arrow, curr_outer_pcd
         #return g1d,g2d,self.d1,self.d2,frame, self.vel_arrow
@@ -643,7 +645,7 @@ def draw_lines(start_points, end_points, line_set,local):
     # line_points = np.vstack((start_points, end_points))
     valid_start = ((line_start[:,2] <= 1) & (line_start[:,2] >= 0.07)) 
     valid_end = ((line_end[:,2] <= 1) & (line_end[:,2] >= 0.07))
-    valid_dist = dist < 0.6
+    valid_dist = dist < 0.006
     mask = valid_start & valid_end & valid_dist
     
     # Replace invalid start points with corresponding end points

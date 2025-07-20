@@ -15,18 +15,41 @@ from optix_castrays import OptiXRaycaster
 import torch
 import torch.nn.functional as F
 
-width = 848
-height = 480
-border = 3 #pixel border
-np_mask_invalid_points = np.ones((height,width), dtype = np.uint8)
-np_mask_invalid_points[border:height-border,border:width-border] = 0
-mask_invalid_points = cv2.cuda.GpuMat(rows = height, cols = width,type = cv2.CV_8U)
-mask_invalid_points.upload(np_mask_invalid_points)
+ply_path = 'full_outer_inner_part_only.ply'
+# pcd = o3d.t.io.read_point_cloud(ply_path)
+# pcd = o3d.t.io.read_point_cloud(ply_path)
+# pcd.scale(scale = 0.03912, center = [0,0,0])
+# print("1")
+# pcd.estimate_normals()
+# print("2")
+# pcd.orient_normals_consistent_tangent_plane(k = 10)
+# normals = pcd.point.normals.numpy()
+#file_name = 'inner_normals_oriented.npy'
+#np.save(file_name, normals)
 
-img = mask_invalid_points.download() * 255
-cv2.imshow("mask",img)
-cv2.waitKey(0)  
-cv2.destroyAllWindows()
+normals = o3d.core.Tensor.load('inner_normals_oriented.npy')
+mesh = o3d.t.io.read_triangle_mesh(ply_path)
+mesh.scale(scale = 0.03912, center = [0,0,0])
+mesh.vertex.normals = normals #pcd.point.normals
+#mesh.compute_vertex_normals()
+print("3")
+mesh.compute_triangle_normals()
+print("4")
+mesh.normalize_normals()
+print("5")
+
+# width = 848
+# height = 480
+# border = 3 #pixel border
+# np_mask_invalid_points = np.ones((height,width), dtype = np.uint8)
+# np_mask_invalid_points[border:height-border,border:width-border] = 0
+# mask_invalid_points = cv2.cuda.GpuMat(rows = height, cols = width,type = cv2.CV_8U)
+# mask_invalid_points.upload(np_mask_invalid_points)
+
+# img = mask_invalid_points.download() * 255
+# cv2.imshow("mask",img)
+# cv2.waitKey(0)  
+# cv2.destroyAllWindows()
 
 # ply_path = 'full_outer_inner_part_only.ply'
 # pcd = o3d.t.io.read_point_cloud(ply_path)

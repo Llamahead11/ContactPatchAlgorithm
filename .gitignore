@@ -2,6 +2,7 @@
 __pycache__/
 TensorContactPatchAlgorithm/__pycache__/
 ContactPatchAlgorithm/__pycache__/
+OptTensorContactPatchAlgorithm/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -63,7 +64,25 @@ Desktop.ini
 *.nsys-rep
 
 # Photos (in a folder named 'photos')
+OptGpuTensorContactPatchAlgorithm/Farne_video/
+OptGpuTensorContactPatchAlgorithm/hist/
+OptGpuTensorContactPatchAlgorithm/histnorm/
+OptGpuTensorContactPatchAlgorithm/Inner_Deformation/
+OptGpuTensorContactPatchAlgorithm/Outer_Deformation/
+OptGpuTensorContactPatchAlgorithm/Inner_Deformation - Copy/
+OptGpuTensorContactPatchAlgorithm/Outer_Deformation - Copy/
+OptGpuTensorContactPatchAlgorithm/realsense2/
+OptGpuTensorContactPatchAlgorithm/saved_arrays/
+OptGpuTensorContactPatchAlgorithm/SIFT_video/
+OptGpuTensorContactPatchAlgorithm/test1/
+OptGpuTensorContactPatchAlgorithm/track/
+OptGpuTensorContactPatchAlgorithm/hist/
+
 TensorContactPatchAlgorithm/Farne_video/
+TensorContactPatchAlgorithm/hist/
+TensorContactPatchAlgorithm/hist_of_distances.avi/
+TensorContactPatchAlgorithm/hist_of_norm.avi/
+TensorContactPatchAlgorithm/histnorm/
 TensorContactPatchAlgorithm/Inner_Deformation/
 TensorContactPatchAlgorithm/Outer_Deformation/
 TensorContactPatchAlgorithm/realsense2/
@@ -80,7 +99,9 @@ ContactPatchAlgorithm/realsense2/
 ContactPatchAlgorithm/SIFT_video/
 ContactPatchAlgorithm/LKD_video/
 ContactPatchAlgorithm/test1/
-
+color/
+depth/
+DATA/
 
 # Ignore point cloud and 3D mesh files
 *.pcd
