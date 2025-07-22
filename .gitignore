@@ -77,6 +77,8 @@ OptGpuTensorContactPatchAlgorithm/SIFT_video/
 OptGpuTensorContactPatchAlgorithm/test1/
 OptGpuTensorContactPatchAlgorithm/track/
 OptGpuTensorContactPatchAlgorithm/hist/
+OptGpuTensorContactPatchAlgorithm/*.nsys-rep/
+
 
 TensorContactPatchAlgorithm/Farne_video/
 TensorContactPatchAlgorithm/hist/
@@ -90,6 +92,7 @@ TensorContactPatchAlgorithm/SIFT_video/
 TensorContactPatchAlgorithm/test1/
 TensorContactPatchAlgorithm/track/
 TensorContactPatchAlgorithm/hist/
+TensorContactPatchAlgorithm/*.nsys-rep/
 
 ContactPatchAlgorithm/Farne_video/
 ContactPatchAlgorithm/Farne_video - Copy/
