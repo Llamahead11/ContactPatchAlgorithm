@@ -388,7 +388,7 @@ def mesh_indices_ref():
     triangles = np.array(triangles)
     return triangles
 
-def inner_deformed_to_inner_undeformed(prev_valid_mask,shared_stream,raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg):
+def inner_deformed_to_inner_undeformed(rough_T,prev_valid_mask,shared_stream,raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,model_ply,draw_reg):
     """
     Function to get the SIGNED corressponding distances between 
     the T2Cam Point Cloud and the Inner Tyre Model
@@ -418,6 +418,9 @@ def inner_deformed_to_inner_undeformed(prev_valid_mask,shared_stream,raycaster,i
     
     print("BEGIN:", t_e_begin-t_s_begin)
 
+    full_T = fine_T.matmul(rough_T)
+    inv_full_T = full_T.inv()
+
     ## OptiX ray tracing engine
     start_cv21 = cv2.getTickCount()
     with shared_stream:
@@ -431,7 +434,8 @@ def inner_deformed_to_inner_undeformed(prev_valid_mask,shared_stream,raycaster,i
         np.savez_compressed(f"saved_arrays/iteration_{count:03d}.npz",
             orig=cp.asnumpy(origins),
             hit_p=cp.asnumpy(hit_point),
-            hit_p_o=cp.asnumpy(hit_point_o)
+            hit_p_o=cp.asnumpy(hit_point_o),
+            inv_T = inv_full_T.numpy()
         )
         
         print(hit_point_o)
@@ -1110,7 +1114,7 @@ def main():
     print("Registration in", register_time)
 
     # with shared_stream:
-    fine_T,init_mask, t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist,t2_d_pcd_outer_cu, outer_select,plane = inner_deformed_to_inner_undeformed(prev_valid_mask,shared_stream,raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,outer_model_ply,draw_reg)
+    fine_T,init_mask, t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist,t2_d_pcd_outer_cu, outer_select,plane = inner_deformed_to_inner_undeformed(rough_T,prev_valid_mask,shared_stream,raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,model_pcd_cuda,t2cam_pcd_cuda,count,model_pcd,outer_model_ply,draw_reg)
     time_at_Inner_c2c = time.time()
     c2c_dist_time = time_at_Inner_c2c - time_at_registration
     print("Inner and Outer C2C raycasting distance calculated in", c2c_dist_time)
@@ -1286,7 +1290,7 @@ def main():
                     register_time = time_at_registration - time_at_corres_vec
                     print("Registration in", register_time)
 
-                    fine_T, curr_valid_mask,t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist,t2_d_pcd_outer_cu, outer_select,plane = inner_deformed_to_inner_undeformed(prev_valid_mask,shared_stream,raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,model_pcd_cuda,curr_outer_pcd,count,model_pcd,outer_model_ply,draw_reg)
+                    fine_T, curr_valid_mask,t2_d_pcd_inner_cu, max_inner_def, cropped_model_pcd_cu, d_inner_dist,t2_d_pcd_outer_cu, outer_select,plane = inner_deformed_to_inner_undeformed(rough_T,prev_valid_mask,shared_stream,raycaster,inner_undef_lat,inner_undef,inner_lat,inner_arr,model_pcd_cuda,curr_outer_pcd,count,model_pcd,outer_model_ply,draw_reg)
                     time_at_Inner_c2c = time.time()
                     c2c_dist_time = time_at_Inner_c2c - time_at_registration
                     print("Inner and Outer C2C raycasting distance calculated in", c2c_dist_time)
