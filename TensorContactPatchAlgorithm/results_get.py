@@ -22,6 +22,8 @@ import matplotlib.pyplot as plt
 # with open('cross_section.npy', 'rb') as f:
 #     inner_arr = np.load(f)
 #     outer_arr = np.load(f)
+
+
 inner_arr_un = np.load('inner_arr_un.npy', allow_pickle=True)
 outer_arr_un = np.load('outer_arr_un.npy', allow_pickle=True)
 inner_lat_un = np.load('inner_lat_un.npy', allow_pickle=True)
@@ -352,4 +354,50 @@ plt.grid(True)
 plt.legend(loc='lower center', bbox_to_anchor=(.5, 0), fontsize=14,labelspacing=2, ncol = 7)
 
 
-plt.show()
+################plt.show()
+
+
+outer_model = o3d.t.io.read_point_cloud("full_outer_outer_part_only.ply")
+outer_model.scale(scale = 0.03912, center = [0,0,0])
+
+
+valid_lat = o3d.t.geometry.PointCloud()
+valid_lat.point.positions = o3d.core.Tensor(outer_lat_un.reshape(-1,3))
+#valid_lat.estimate_normals()
+print(1)
+valid_long = o3d.t.geometry.PointCloud()
+valid_long.point.positions = o3d.core.Tensor(outer_arr_un.reshape(-1,3))
+#valid_long.estimate_normals()
+print("1")
+radii = [0.005, 0.01, 0.02, 0.04]
+a = np.array([1,0.2196,0.596])
+c = np.tile(a, (12, 1))
+plane1 = o3d.t.geometry.TriangleMesh.create_box(height=0.85,depth=0.005)
+plane1.translate(o3d.core.Tensor([-0.5,-0.5,0.13]))
+plane1.compute_vertex_normals()
+plane1.compute_triangle_normals()
+print(plane1.triangle.normals.shape)
+plane1.triangle.colors = o3d.core.Tensor(c)
+plane2 = o3d.t.geometry.TriangleMesh.create_box(height=0.85,depth=0.005)
+plane2.translate(o3d.core.Tensor([-0.5,-0.5,0.17]))
+plane2.triangle.colors = o3d.core.Tensor(c)
+plane3 = o3d.t.geometry.TriangleMesh.create_box(height=0.85,depth=0.005)
+plane3.translate(o3d.core.Tensor([-0.5,-0.5,0.09]))
+plane3.triangle.colors = o3d.core.Tensor(c)
+
+plane4 = o3d.t.geometry.TriangleMesh.create_box(height=0.85,depth=0.3)
+plane4.vertex.positions = o3d.core.Tensor([[0,0,0],[0.005,0,0],[0,0,0.3],[0.005,0,0.3],[0,0.85,0],[0.005,0.85,0],[0,0.85,0.3],[0.005,0.85,0.3]])
+plane4.translate(o3d.core.Tensor([-0.04,-0.5,0]))
+plane4.triangle.colors = o3d.core.Tensor(c)
+plane5 = o3d.t.geometry.TriangleMesh.create_box(height=0.85,depth=0.3)
+plane5.vertex.positions = o3d.core.Tensor([[0,0,0],[0.005,0,0],[0,0,0.3],[0.005,0,0.3],[0,0.85,0],[0.005,0.85,0],[0,0.85,0.3],[0.005,0.85,0.3]])
+plane5.translate(o3d.core.Tensor([0,-0.5,0]))
+plane5.triangle.colors = o3d.core.Tensor(c)
+plane6 = o3d.t.geometry.TriangleMesh.create_box(height=0.85,depth=0.3)
+plane6.vertex.positions = o3d.core.Tensor([[0,0,0],[0.005,0,0],[0,0,0.3],[0.005,0,0.3],[0,0.85,0],[0.005,0.85,0],[0,0.85,0.3],[0.005,0.85,0.3]])
+plane6.translate(o3d.core.Tensor([0.04,-0.5,0]))
+plane6.triangle.colors = o3d.core.Tensor(c)
+#valid_lat_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(valid_lat.to_legacy(), o3d.utility.DoubleVector(radii))
+#print(outer_arr_loaded.reshape(-1,3).shape)
+#print(outer_arr_loaded.reshape(-1,3).dtype)
+o3d.visualization.draw([outer_model, valid_lat, valid_long,plane1,plane2,plane3,plane4,plane5,plane6])
