@@ -185,7 +185,7 @@ if __name__ == "__main__":
             # Remove background - Set pixels further than clipping_distance to grey
             grey_color = 153
             #depth image is 1 channel, color is 3 channels
-            depth_image_3d = np.dstack((depth_image, depth_image, depth_image))
+            depth_image_3d = np.dstack((depth_image*1000, depth_image*1000, depth_image*1000))
             bg_removed = np.where((depth_image_3d > clipping_distance) | \
                     (depth_image_3d <= 0), grey_color, color_image)
 

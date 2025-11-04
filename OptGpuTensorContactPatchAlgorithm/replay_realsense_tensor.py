@@ -5,6 +5,7 @@ import os
 import time
 from numba import cuda
 import numba
+import playsound
 
 class CudaArrayInterface:
     def __init__(self, gpu_mat):
@@ -35,12 +36,13 @@ class CudaArrayInterface:
 
 
 class read_RGB_D_folder:
-    def __init__(self, folder, starting_index=0,depth_num=3,debug_mode=True):
+    def __init__(self, folder, starting_index=0, ending_index = -1,depth_num=3,debug_mode=True):
         self.folder = folder
         self.depth_folder = os.path.join(os.path.dirname(__file__),folder, "depth")
         self.color_folder = os.path.join(os.path.dirname(__file__),folder, "color")
         self.depth_num = depth_num
         self.index = starting_index
+        self.end_index = ending_index
         self.debug_mode = debug_mode
         self.depth_files = [os.path.join(self.depth_folder, f) for f in os.listdir(self.depth_folder) if f.endswith(".png")]
         self.color_files = [os.path.join(self.color_folder, f) for f in os.listdir(self.color_folder) if f.endswith(".jpg")]
@@ -75,7 +77,10 @@ class read_RGB_D_folder:
         self.triangles = np.array(self.triangles)
 
     def has_next(self):
-        return self.index < len(self.color_files)
+        if self.end_index == -1:
+            return self.index < len(self.color_files)
+        else:
+            return self.index < self.end_index
     
     def get_next_frame(self):
         current_depth_np = np.asarray(o3d.io.read_image(self.depth_files[self.index]), np.float32) 
@@ -98,14 +103,19 @@ class read_RGB_D_folder:
         self.index += 1
         depth_scale = 1/0.0001
        
-        #filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 10, dist_sigma = 20.0)
+        filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 10, dist_sigma = 20.0)
         vertex_map = current_depth_cuda.create_vertex_map(self.intrinsic)
-        normal_map = vertex_map.create_normal_map()
+        vertex_filtered_map = filtered_depth.create_vertex_map(self.intrinsic)
+        normal_map = vertex_filtered_map.create_normal_map()
 
         pcd_cuda = o3d.t.geometry.PointCloud(self.cu)
         pcd_cuda.point.positions = vertex_map.as_tensor().reshape((-1, 3))
         pcd_cuda.point.normals = normal_map.as_tensor().reshape((-1, 3))
         pcd_cuda.point.colors = current_color_cuda.as_tensor().reshape((-1, 3))
+        pcd_cuda.normalize_normals()
+        # mask = pcd_cuda.point.positions[:,2] > 0.001
+        # pcd_cuda = pcd_cuda.select_by_mask(mask)
+
         #pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
         #o3d.visualization.draw([pcd_cuda])
         # vertex_map_np = vertex_map.as_tensor().cpu().numpy()

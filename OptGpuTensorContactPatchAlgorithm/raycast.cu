@@ -75,7 +75,7 @@ extern "C" __global__ void __raygen__rg()
     // result = make_float3(__int_as_float( p0 ),__int_as_float( p1 ),__int_as_float( p2 ));
     float t = length(result - ray_origin); // or pass t as payload
     params.hit_positions_inner[ray_id] = result;
-    if (t > 0.03f){
+    if (t > 0.2f){
         params.hit_positions_inner[ray_id] = make_float3( 0 );
     }
     else{
@@ -104,7 +104,7 @@ extern "C" __global__ void __raygen__rg()
         
         params.hit_positions_inner[ray_id] = result;
         float t = length(result - ray_origin); // or pass t as payload
-        if (t > 0.03f){
+        if (t > 0.2f){
             params.hit_positions_inner[ray_id] = make_float3( 0 );
         }
         else{
@@ -136,7 +136,7 @@ extern "C" __global__ void __raygen__rg()
         // result = make_float3(__int_as_float( p0 ),__int_as_float( p1 ),__int_as_float( p2 ));
         float t_o = length(result_o - ray_origin); // or pass t as payload
         params.hit_positions_outer[ray_id] = result_o;
-        if (t_o > 0.06f){
+        if (t_o > 0.1f){
             //|| t_o < 0.045
             params.hit_positions_outer[ray_id] = make_float3( 0 );
         }
@@ -170,7 +170,7 @@ extern "C" __global__ void __raygen__rg()
         // result = make_float3(__int_as_float( p0 ),__int_as_float( p1 ),__int_as_float( p2 ));
         float t_t = length(result_t - ray_origin); // or pass t as payload
         params.hit_positions_tread[ray_id] = result_t;
-        if (t_t > 0.06f){
+        if (t_t > 0.1f){
             //|| t_o < 0.045
             params.hit_positions_tread[ray_id] = make_float3( 0 );
         }

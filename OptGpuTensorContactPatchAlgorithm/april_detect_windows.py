@@ -50,7 +50,7 @@ class DetectAprilTagsWindows():
                 self.pcd_IDs.append(cent_x+cent_y*848)
 
             # Draw around the tag
-            if self.debug_mode:
+            if self.debug_mode == False:
                 for i in range(4):
                     j = (i + 1) % 4
                     point1 = (int(detection.getCorner(i).x), int(detection.getCorner(i).y))

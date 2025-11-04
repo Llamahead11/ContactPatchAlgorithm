@@ -75,7 +75,7 @@ class read_RGB_D_folder:
         self.triangles = np.array(self.triangles)
 
     def has_next(self):
-        return self.index < len(self.color_files)
+        return self.index < len(self.color_files) - 1
     
     def get_next_frame(self):
         current_depth_np = np.asarray(o3d.io.read_image(self.depth_files[self.index]), np.float32) 
@@ -98,8 +98,8 @@ class read_RGB_D_folder:
         self.index += 1
         depth_scale = 1/0.0001
        
-        filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 50, dist_sigma = 30.0)
-        vertex_map = filtered_depth.create_vertex_map(self.intrinsic)
+        #filtered_depth = current_depth_cuda.filter_bilateral(kernel_size = 7, value_sigma= 50, dist_sigma = 30.0)
+        vertex_map = current_depth_cuda.create_vertex_map(self.intrinsic)
         normal_map = vertex_map.create_normal_map()
 
         pcd_cuda = o3d.t.geometry.PointCloud(self.cu)

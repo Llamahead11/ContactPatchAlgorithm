@@ -40,10 +40,34 @@ class DenseOptFlow:
         self.stream = stream
         self.cp_stream = external_cp_cv2_wrapped_stream
         if dense_method == 'farne':
-            self.dense_flow = cv2.cuda.FarnebackOpticalFlow.create(numLevels=5,
+            # self.dense_flow = cv2.cuda.FarnebackOpticalFlow.create(numLevels=5,
+            #                                             pyrScale=0.5,
+            #                                             fastPyramids=True,
+            #                                             winSize=15,
+            #                                             numIters=10,
+            #                                             polyN=7,
+            #                                             polySigma=1.5,
+            #                                             flags=0
+            # )
+
+            #Rotation Wheel
+
+            # self.dense_flow = cv2.cuda.FarnebackOpticalFlow.create(numLevels=8,
+            #                                             pyrScale=0.5,
+            #                                             fastPyramids=True,
+            #                                             winSize=9,
+            #                                             numIters=15,
+            #                                             polyN=7,
+            #                                             polySigma=1.5,
+            #                                             flags=0
+            # )
+
+
+            #SLIP STATIC
+            self.dense_flow = cv2.cuda.FarnebackOpticalFlow.create(numLevels=3,
                                                         pyrScale=0.5,
-                                                        fastPyramids=True,
-                                                        winSize=15,
+                                                        fastPyramids=False,
+                                                        winSize=9,
                                                         numIters=10,
                                                         polyN=7,
                                                         polySigma=1.5,
@@ -52,9 +76,9 @@ class DenseOptFlow:
         elif dense_method == 'brox':
             self.dense_flow = cv2.cuda.BroxOpticalFlow.create(alpha=0.197,
                                                gamma=5.0,
-                                               scale_factor=0.8,
-                                               inner_iterations=5,
-                                               outer_iterations=150,
+                                               scale_factor=0.5,
+                                               inner_iterations=10,
+                                               outer_iterations=200,
                                                solver_iterations=10
             )
         elif dense_method == 'pyrLK':
@@ -487,13 +511,13 @@ class DenseOptFlow:
             g1_n = prev_n.reshape(-1,3).toDlpack()
             self.g1.point.positions = o3d.core.Tensor.from_dlpack(g1_p)
             self.g1.point.normals = o3d.core.Tensor.from_dlpack(g1_n)
-            self.g1.paint_uniform_color(o3d.core.Tensor([0,0,0]))
+            self.g1.paint_uniform_color(o3d.core.Tensor([0,0,0],dtype=o3d.core.float32))
             g1d = self.g1.uniform_down_sample(every_k_points = 20)
             g2_p = curr.reshape(-1,3).toDlpack()
             g2_n = curr_n.reshape(-1,3).toDlpack()
             self.g2.point.positions = o3d.core.Tensor.from_dlpack(g2_p)
             self.g2.point.normals = o3d.core.Tensor.from_dlpack(g2_n)
-            self.g2.paint_uniform_color(o3d.core.Tensor([0,0,0]))
+            self.g2.paint_uniform_color(o3d.core.Tensor([0,0,0],dtype=o3d.core.float32))
             curr_outer_pcd = self.g2.clone()
             g2d = self.g2.uniform_down_sample(every_k_points = 20)
             draw_lines(prev, curr, self.d1, local_disp)
@@ -552,17 +576,18 @@ def draw_lines(start_points, end_points, line_set,local):
 
     valid_start = ((line_start[:,2] <= 1) & (line_start[:,2] >= 0.07)) 
     valid_end = ((line_end[:,2] <= 1) & (line_end[:,2] >= 0.07))
-    valid_dist = dist < 0.006
+    valid_dist = dist < 0.003
+    #nan_mask = ~ (cp.isnan(line_end).any(axis=1) | cp.isnan(line_start).any(axis=1))
     mask = valid_start & valid_end & valid_dist
     
     # Replace invalid start points with corresponding end points
     line_valid_start = line_start[mask]
     line_valid_end = line_end[mask] 
 
-    #disp = line_valid_end[:,1] - line_valid_start[:,1]
-    disp = (((local.reshape(-1,3))[::20])[mask])[:,2]
+    disp = dist[mask] #line_valid_end[:,1] - line_valid_start[:,1]
+    #disp = (((local.reshape(-1,3))[::20])[mask])[:,2]
     if disp.shape[0] != 0:
-        normalized =  (disp - disp.min()) / (disp.max() - disp.min())
+        normalized =  (disp - (-0.003)) / (0.003 - (-0.003))
         #(vel[mask] - vel[mask].mean()) / vel[mask].std() #
         # Use a colormap (e.g., viridis, jet, plasma)
         colormap = cm.get_cmap('jet')
@@ -585,6 +610,7 @@ def draw_lines(start_points, end_points, line_set,local):
         line_set.point.positions = o3d.core.Tensor.from_dlpack(lps)
         line_set.line.indices = o3d.core.Tensor.from_dlpack(ls)
         line_set.line.colors = o3d.core.Tensor(colors, dtype=o3d.core.float32, device = o3d.core.Device("CUDA:0"))
+        #line_set.line.colors.to(o3d.core.float32)
     
 
 def draw_lines_vel(start_points, end_points, line_set, local):

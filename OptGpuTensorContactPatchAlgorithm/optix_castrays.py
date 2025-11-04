@@ -177,6 +177,13 @@ class OptiXRaycaster:
         normals = o3d.core.Tensor.load('inner_normals_oriented.npy')
         mesh = o3d.t.io.read_triangle_mesh(ply_path)
         mesh.scale(scale = 0.03912, center = [0,0,0])
+        centroid = np.array([0.02758715, -0.07112041, 0.14297444])
+        mesh.translate(o3d.core.Tensor(-centroid))
+        R = np.array([[2.52815128e-02, 3.33760291e-02, 9.99123058e-01], 
+            [-7.85843857e-01, 6.18424477e-01, -7.73910520e-04], 
+            [-6.17907985e-01, -7.85135152e-01,  4.18630537e-02]])
+        mesh.rotate(o3d.core.Tensor(R), center = [0,0,0])
+
         mesh.vertex.normals = normals #pcd.point.normals
         #mesh.compute_vertex_normals()
         mesh.compute_triangle_normals()
@@ -202,6 +209,12 @@ class OptiXRaycaster:
     def _load_mesh_to_gpu_1(self, ply_path):
         mesh = o3d.t.io.read_triangle_mesh(ply_path)
         mesh.scale(scale = 0.03912, center = [0,0,0])
+        centroid = np.array([0.02758715, -0.07112041, 0.14297444])
+        mesh.translate(o3d.core.Tensor(-centroid))
+        R = np.array([[2.52815128e-02, 3.33760291e-02, 9.99123058e-01], 
+            [-7.85843857e-01, 6.18424477e-01, -7.73910520e-04], 
+            [-6.17907985e-01, -7.85135152e-01,  4.18630537e-02]])
+        mesh.rotate(o3d.core.Tensor(R), center = [0,0,0])
         #mesh = mesh.filter_smooth_simple(10)
         mesh.compute_vertex_normals()
         with self.stream:

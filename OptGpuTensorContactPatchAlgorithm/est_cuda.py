@@ -9,34 +9,318 @@ import numpy as np
 import open3d as o3d
 import optix
 import cupy as cp
+import csv
 
-from optix_castrays import OptiXRaycaster
-#import kaolin as kao
-import torch
-import torch.nn.functional as F
-s = cp.cuda.Stream()
-with s:
-    cp_start = cp.array([[0.01,0.3,0.45],[0.03,0.6,0.75]])
-    cp_end = cp.array([[0.1,0.4,0.55],[0.5,0.7,0.85]])
-    repeats = 407040//2
+import scipy.io as sio
 
-    cp_big_start = cp.tile(cp_start, (repeats, 1)).reshape(480,848,3)
-    cp_big_end = cp.tile(cp_end, (repeats, 1)).reshape(480,848,3)
-    for i in range(20):
-        e1 = cp.cuda.Event()
-        e2 = cp.cuda.Event()
-        e1.record()
-        ray_points = cp.linspace(cp_big_start,cp_big_end,10,True,False,cp.float32,axis = 0)
 
-        # steps = cp.linspace(0, 1, 10, dtype=cp.float32)  # shape: (10,)
-        # steps = steps[None, :, None]  # shape: (1, 10, 1)
-        # result = (1 - steps) * cp_big_start[:, None, :] + steps * cp_big_end[:, None, :]
+start=np.array([0.0043582423,0.0006682535,0.2466])
+end=np.array([0.0038174386,0.0005853315,0.216])
 
-        e2.record()
-        e2.synchronize()
-        t = cp.cuda.get_elapsed_time(e1, e2)
-        print(t)
-        print(ray_points.shape)
+print(np.linalg.norm(end-start))
+
+#================================================================
+
+# estimated = np.array([7223.37, 7279.34, 8217.7, 9016.58])
+# measured  = np.array([6506.11, 7321.94, 9027.52, 9755.13])
+
+# # Absolute error
+# abs_error = np.abs(estimated - measured)
+
+# # Relative error (%)
+# rel_error = abs_error / measured * 100
+
+# # RMSE
+# rmse = np.sqrt(np.mean((estimated - measured)**2))
+
+# # MAPE
+# mape = np.mean(rel_error)
+
+# print("Absolute Error:", abs_error)
+# print("Relative Error (%):", rel_error)
+# print("RMSE:", rmse)
+# print("MAPE (%):", mape)
+
+# data7 = sio.loadmat("contact_patch_points_test_7.mat")
+# data8 = sio.loadmat("contact_patch_points_test_8.mat")
+# data9 = sio.loadmat("contact_patch_points_test_9.mat")
+# data21 = sio.loadmat("contact_patch_points_test_21.mat")
+
+# #boundary = data["boundary_mm_all"]    
+# interior7 = data7["interior_mm"] 
+# interior8 = data8["interior_mm"] 
+# interior9 = data9["interior_mm"] 
+# interior21 = data21["interior_mm"] 
+
+# #boundary_3d = np.hstack([boundary, np.zeros((boundary.shape[0], 1))])
+# interior_3d7 = np.hstack([interior7, np.zeros((interior7.shape[0], 1))])
+# interior_3d8 = np.hstack([interior8, np.zeros((interior8.shape[0], 1))])
+# interior_3d9 = np.hstack([interior9, np.zeros((interior9.shape[0], 1))])
+# interior_3d21 = np.hstack([interior21, np.zeros((interior21.shape[0], 1))])
+
+# # boundary_pcd = o3d.t.geometry.PointCloud()
+# #boundary_pcd.point.positions = o3d.core.Tensor(boundary_3d)
+# interior_pcd7 = o3d.t.geometry.PointCloud()
+# interior_pcd7.point.positions = o3d.core.Tensor(interior_3d7)
+# interior_pcd8 = o3d.t.geometry.PointCloud()
+# interior_pcd8.point.positions = o3d.core.Tensor(interior_3d8)
+# interior_pcd9 = o3d.t.geometry.PointCloud()
+# interior_pcd9.point.positions = o3d.core.Tensor(interior_3d9)
+# interior_pcd21 = o3d.t.geometry.PointCloud()
+# interior_pcd21.point.positions = o3d.core.Tensor(interior_3d21)
+
+# o3d.visualization.draw([interior_pcd7, interior_pcd8, interior_pcd9, interior_pcd21])
+
+
+
+
+
+#==================================================================================================
+
+# depth = cv2.imread(r".\DATA\test_9_sine_0_2Hz_3_cycles_80000_right_tyre_d3_c18_2bar\depth\000026.png", cv2.IMREAD_UNCHANGED)
+# color = cv2.imread(r".\DATA\test_9_sine_0_2Hz_3_cycles_80000_right_tyre_d3_c18_2bar\color\000026.jpg", cv2.IMREAD_UNCHANGED)
+# # ensure it's float for scaling
+# color = color.astype(np.float32)/255
+# depth = depth.astype(np.float32)/10000
+
+# plt.figure(figsize=(8,6))
+# img_c = plt.imshow(color)
+# plt.show()
+# img_m = plt.imshow(depth, cmap='viridis')
+
+
+# # normalize depth for visualization (0 → min depth, 1 → max depth)
+# depth_norm = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))
+
+# # plot with colormap
+# plt.figure(figsize=(8,6))
+# img = plt.imshow(depth_norm, cmap='viridis')   # try 'plasma' or 'turbo' for other looks
+# cbar = plt.colorbar(img_m, fraction=0.027, pad=0.04)
+# cbar.set_label("Depth [m]", rotation=270, labelpad=15)
+
+# plt.axis('off')
+# plt.show()
+
+# --- optional: save colorized depth map as PNG ---
+#color_mapped = (plt.cm.viridis(depth_norm)[:,:,:3] * 255).astype(np.uint8)
+#cv2.imwrite("depth_colored.png", cv2.cvtColor(color_mapped, cv2.COLOR_RGB2BGR))
+
+
+#===============================================
+
+
+# box = o3d.geometry.TriangleMesh.create_box()
+# cone = o3d.geometry.TriangleMesh.create_cone()
+# cone.compute_vertex_normals()
+# cone.compute_triangle_normals()
+# box.compute_vertex_normals()
+# box.compute_triangle_normals()
+# box_pcd = box.sample_points_poisson_disk(5000)
+# box_pcd.estimate_normals()
+# cone_pcd = cone.sample_points_poisson_disk(5000)
+# cone_pcd.estimate_normals()
+# o3d.visualization.draw_geometries([cone_pcd])
+# fig, ax = plt.subplots(figsize=(4, 6))
+
+# # Define colormap and normalization
+# cmap = plt.cm.get_cmap('jet')
+# norm = plt.Normalize(vmin=-3, vmax=3)
+
+# # Create a normal vertical colorbar
+# sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+# sm.set_array([])  # required for matplotlib < 3.1
+# cbar = plt.colorbar(sm, ax=ax, orientation="vertical")
+# # Label
+# cbar.set_label("Displacement [mm]", labelpad=15)
+
+# plt.show()
+
+#==========================================================
+
+# def elapsed_time_until_frame(time_file, frame_number):
+#     """
+#     Calculate elapsed time until a given frame number.
+
+#     Parameters:
+#         time_file (str): Path to the .npy file containing frame-to-frame times.
+#         frame_number (int): The frame index (inclusive) to calculate elapsed time until.
+
+#     Returns:
+#         float: Total elapsed time until the given frame.
+#     """
+#     # Load time differences (between consecutive frames)
+#     time_diffs = np.load(time_file) * (0.001)
+
+#     # Ensure frame_number is valid
+#     if frame_number < 0 or frame_number > len(time_diffs):
+#         raise ValueError(f"Frame number {frame_number} out of range. "
+#                          f"Valid range is 0 to {len(time_diffs)}.")
+
+#     # Sum elapsed time up to the frame (exclusive)
+#     total_seconds = np.sum(time_diffs[:frame_number])
+
+#     # Convert to minutes and seconds
+#     minutes = int(total_seconds // 60)
+#     seconds = total_seconds % 60  # keeps fractional seconds
+
+#     return minutes, seconds, total_seconds
+
+
+# # Example usage
+# if __name__ == "__main__":
+#     time_file = "./DATA/STTR_test_8_1000mm_min_500kg_10sec_d3_c18_2bar/time.npy"
+#     frame_number = 270  # Change this to the frame you want
+#     minutes, seconds, total_seconds = elapsed_time_until_frame(time_file, frame_number)
+#     print(f"Elapsed time until frame {frame_number}: "
+#           f"{minutes} min {seconds:.3f} sec (total {total_seconds:.3f} sec)")
+
+#=======================
+
+# def load_rc_control_points(file_path="./4_row_model_control_points.csv",scale_factor=0.019390745853434508):
+#     """
+#     Load control points from a CSV file.
+
+#     Args:
+#         file_path (str): Path to the CSV file containing control points.
+#         scale_factor (float): Scaling factor for the control point coordinates.
+
+#     Returns:
+#         tuple: 
+#             markers (list): List of marker HEX names from the CSV.
+#             m_points (list): List of scaled 3D points (x, y, z).
+#             numeric_markers (list): List of hex to dec marker ids from RC.
+#     """
+#     markers = []
+#     numeric_markers = []
+#     m_points = []
+
+#     try:
+#         with open(file_path, 'r') as file:
+#             csv_reader = csv.reader(file)
+            
+#             # Iterate through rows
+#             for row in csv_reader:
+#                 #print(row)
+#                 markers.append(row[0])
+#                 m_points.append([
+#                     scale_factor*float(row[1]),
+#                     scale_factor*float(row[2]),
+#                     scale_factor*float(row[3])
+#                 ])  
+#                 numeric_markers.append(row[5])
+
+#     except FileNotFoundError:
+#         raise FileNotFoundError(f"File not found: {file_path}")
+
+#     return markers, m_points, numeric_markers
+
+# ply_path = 'full_outer_inner_part_only.ply'
+# pcd_1 = o3d.t.io.read_point_cloud(ply_path)
+# pcd_2 = o3d.t.io.read_point_cloud(ply_path)
+# pcd_1.scale(scale = 0.03912, center = [0,0,0])
+# pcd_2.scale(scale = 0.03912, center = [0,0,0])
+
+# pcd_3 = o3d.t.io.read_point_cloud('full_outer_treads_part_only.ply')
+# pcd_3.scale(scale = 0.03912, center = [0,0,0])
+# o3d.visualization.draw([pcd_3])
+
+# markers, m_points, numeric_markers = load_rc_control_points('./full_outer.csv',0.03912)
+# #print(m_points)
+
+# mean = np.mean(m_points, axis=0)
+# print(mean)
+# centroid = o3d.core.Tensor(mean) #pcd_1.get_center()
+# pcd_2.translate(-centroid)
+
+# april_tag_pcd = o3d.t.geometry.PointCloud(o3d.core.Device("CPU:0"))
+# april_tag_pcd.point.positions = o3d.core.Tensor(m_points)
+# april_tag_pcd.translate(-centroid)
+
+# points_centered = april_tag_pcd.point.positions.numpy()  # pcd can be legacy or tensor, just convert
+
+# # Covariance matrix
+# cov = np.cov(points_centered.T)
+
+# # SVD
+# eigvecs, _,_ = np.linalg.svd(cov)
+
+# v1 = eigvecs[:, 0]
+# v2 = eigvecs[:, 1]
+# v3 = eigvecs[:, 2]
+
+# # Reorder so that v2 becomes the first axis
+# reordered_basis = np.column_stack([v3, v1, v2])
+
+# # Rotation from PCA → global
+# #R = reordered_basis.T  
+
+# R_pca_to_global = reordered_basis.T
+# print(R_pca_to_global)
+
+# pcd_2.rotate(R_pca_to_global, center=(0,0,0))
+# april_tag_pcd.rotate(R_pca_to_global, center=(0,0,0))
+
+# plane = o3d.t.geometry.TriangleMesh(device = o3d.core.Device("CUDA:0"))
+# #print(pcd_centre.point.positions.shape[0]) 
+# #print(VT)
+# #print(VT.shape)
+# normal = o3d.core.Tensor([1,0,0],dtype=o3d.core.float32).cuda()# VT[-1]
+# #print(normal)
+# #print(centroid)
+# A, B, C = normal 
+# #print("A:",A,"B:",B,"C:",C)
+# D = 0 # (-normal.mul(centroid)).sum(dim=0)
+# #print("D:",D)
+
+# #A*x+B*y+C*z+D = 0
+# y = o3d.core.Tensor([[-0.5,0.5,-0.5,0.5]],dtype=o3d.core.float32).cuda()
+# z = o3d.core.Tensor([[-0.5,-0.5,0.5,0.5]],dtype=o3d.core.float32).cuda()
+# x = - (B*y + C*z ) / A
+# #print((x.append(y,axis = 0)).append(z,axis = 0).T())
+
+# plane.vertex.positions = (x.append(y,axis = 0)).append(z,axis = 0).T()
+# plane.triangle.indices = o3d.core.Tensor([[0,1,2],[1,2,3]],dtype=o3d.core.int64).cuda()
+
+# #dist_to_plane = ((masked_pcd.point.positions).matmul(normal) + D).flatten()
+
+# o3d.visualization.draw([april_tag_pcd,pcd_2,plane.cpu()])
+
+
+# #fit a plane to april tags and with principle coordinate normals
+
+# # fit a plane to t2cam points
+
+# #find angle between planes = slip angles
+
+#================================================================================================================
+
+# from optix_castrays import OptiXRaycaster
+# #import kaolin as kao
+# import torch
+# import torch.nn.functional as F
+# s = cp.cuda.Stream()
+# with s:
+#     cp_start = cp.array([[0.01,0.3,0.45],[0.03,0.6,0.75]])
+#     cp_end = cp.array([[0.1,0.4,0.55],[0.5,0.7,0.85]])
+#     repeats = 407040//2
+
+#     cp_big_start = cp.tile(cp_start, (repeats, 1)).reshape(480,848,3)
+#     cp_big_end = cp.tile(cp_end, (repeats, 1)).reshape(480,848,3)
+#     for i in range(20):
+#         e1 = cp.cuda.Event()
+#         e2 = cp.cuda.Event()
+#         e1.record()
+#         ray_points = cp.linspace(cp_big_start,cp_big_end,10,True,False,cp.float32,axis = 0)
+
+#         # steps = cp.linspace(0, 1, 10, dtype=cp.float32)  # shape: (10,)
+#         # steps = steps[None, :, None]  # shape: (1, 10, 1)
+#         # result = (1 - steps) * cp_big_start[:, None, :] + steps * cp_big_end[:, None, :]
+
+#         e2.record()
+#         e2.synchronize()
+#         t = cp.cuda.get_elapsed_time(e1, e2)
+#         print(t)
+#         print(ray_points.shape)
 
 # ply_path = 'full_outer_inner_part_only.ply'
 # # pcd = o3d.t.io.read_point_cloud(ply_path)

@@ -815,9 +815,12 @@ def main():
     if view_video: viewer3d = Viewer3D("Scene Flow")
     
     cv2_stream = cv2.cuda.Stream()
+    wrap_cv2_cp_stream = cp.cuda.ExternalStream(cv2_stream.cudaPtr(), device_id=-1)
+   
+
     optmethod = config["opt_method"]
     if optmethod == 'dense':
-        dense = DenseOptFlow(depth_profile,debug_mode,config['dense_method'],cv2_stream)
+        dense = DenseOptFlow(depth_profile,debug_mode,config['dense_method'],cv2_stream, wrap_cv2_cp_stream)
     elif optmethod == 'sparse':
         sparse = SparseOptFlow(depth_profile,debug_mode,config['sparse_step'])
 
@@ -956,12 +959,18 @@ def main():
 
             ## DENSE OPTICAL FLOW
 
-            frame_gpu, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = dense.detect2D(gpu_prev_gray, gpu_curr_gray)
+            # frame_gpu, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = dense.detect2D(gpu_prev_gray, gpu_curr_gray)
             
+            # gpu_bgr = dense.vis_hsv_2D()
+            
+            # map_x_gpu, map_y_gpu, traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5 = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
+            
+            # dense.track_3D_vel(time_ms)
+
+            frame_gpu  = dense.detect2D(gpu_prev_gray, gpu_curr_gray)
             gpu_bgr = dense.vis_hsv_2D()
-            
-            map_x_gpu, map_y_gpu, traj_motion_2D_x, traj_motion_2D_y,traj_motion_3D_1, traj_motion_3D_2,traj_motion_3D_3,traj_motion_3D_4,traj_motion_3D_5 = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
-            
+            map_x_gpu, map_y_gpu, curr_tracked_t2cam_pcd = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
+            dense.local_geo_calc()
             dense.track_3D_vel(time_ms)
             
             #frame, gpu_magnitude, gpu_angle, gpu_flow_x, gpu_flow_y = Farne_opt_flow(gpu_prev_gray, gpu_curr_gray)
@@ -1016,22 +1025,22 @@ def main():
             # d3 = draw_lines(g3.point.positions.numpy(), g4.point.positions.numpy())
             # d4 = draw_lines(g4.point.positions.numpy(), g5.point.positions.numpy())
             # d4.paint_uniform_color(o3d.core.Tensor([1,0,0]))
-            x_points = map_x_gpu.download()
-            y_points = map_y_gpu.download()
+            # x_points = map_x_gpu.download()
+            # y_points = map_y_gpu.download()
 
-            mask = (x_points <= 847-0) & (y_points <= 479-0) & (x_points >= 0+0) & (y_points >= 0+0)
+            # mask = (x_points <= 847-0) & (y_points <= 479-0) & (x_points >= 0+0) & (y_points >= 0+0)
 
-            #now create a border to indicate lost tracks that will clump into regions
+            # #now create a border to indicate lost tracks that will clump into regions
 
-            # how to reseed tracks correctly
-            #now get the indices of those points lost and reinitialise with the INTERPOLATED VALUE of those neighbouring points of the index lost?
-            #                 
-            x_points = (x_points[mask]).astype(np.int32)
-            y_points = (y_points[mask]).astype(np.int32)
+            # # how to reseed tracks correctly
+            # #now get the indices of those points lost and reinitialise with the INTERPOLATED VALUE of those neighbouring points of the index lost?
+            # #                 
+            # x_points = (x_points[mask]).astype(np.int32)
+            # y_points = (y_points[mask]).astype(np.int32)
 
-            curr_mask = mask #& prev_mask
+            # curr_mask = mask #& prev_mask
 
-            xy_pixels = np.argwhere(curr_mask)
+            # xy_pixels = np.argwhere(curr_mask)
              
 
             # Create 2D histogram
@@ -1054,13 +1063,13 @@ def main():
 
             # g1,g2,g3,g4,g5,d1,d2,d3,d4 = dense.vis_3D()
             g1,g2,d1,d2,frame,vel_arrow, curr_outer_pcd = dense.vis_3D()
-
+            #o3d.visualization.draw([g1.cpu(),g2.cpu()])
             #g1,g2,g3,g4,g5,d1,d2,d3,d4 = sparse.vis_3D()
 
             t0 = time.time()
             if view_video:
                 #viewer3d.update_cloud(d1=d1.cpu(),d2=d2.cpu(),d3=d3.cpu(),d4=d4.cpu(),g5=g5.cpu())
-                viewer3d.update_cloud(g1=g1.cpu(),g2=g2.cpu(),d1=d1.cpu(),d2=d2.cpu(), frame = frame.cpu(), vel_arrow = vel_arrow.cpu())   
+                viewer3d.update_cloud(g2=g2.cpu(),d1=d1.cpu())   
                 viewer3d.tick()
                 #o3d.visualization.draw([g1.cpu(),g2.cpu(),d1.cpu(),d2.cpu()])
             t1 = time.time()
@@ -1100,17 +1109,17 @@ def main():
 
             frame = frame_gpu.download()
             #valid_mask_cpu = valid_mask.download()
-            valid_image = np.zeros((480, 848), dtype=np.uint8)
-            valid_image[curr_mask] = 255
-            valid_track = np.zeros((480, 848), dtype=np.uint8)
-            valid_track[y_points.flatten(),x_points.flatten()] = 255
-            print(valid_image[valid_image == 0].shape, valid_track[valid_track == 0].shape)
-            prev_mask = curr_mask
+            # valid_image = np.zeros((480, 848), dtype=np.uint8)
+            # valid_image[curr_mask] = 255
+            # valid_track = np.zeros((480, 848), dtype=np.uint8)
+            # valid_track[y_points.flatten(),x_points.flatten()] = 255
+            # print(valid_image[valid_image == 0].shape, valid_track[valid_track == 0].shape)
+            # prev_mask = curr_mask
             # visualization for dense
             cv2.imshow("original", frame)
             cv2.imshow("result", gpu_bgr.download())
-            cv2.imshow("valid points", valid_image)
-            cv2.imshow("valid tracks", valid_track)
+            # cv2.imshow("valid points", valid_image)
+            # cv2.imshow("valid tracks", valid_track)
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 if view_video: viewer3d.stop()

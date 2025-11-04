@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import open3d
 import os
 import cProfile
+from matplotlib.colors import BoundaryNorm
 
 plt.ioff() 
 
@@ -46,33 +47,59 @@ def createDispPlot(label ,fig, ax, clipped, prev_3D_points, vmin=-0.003, vmax=0.
 def createOuterDeformationPlot(label, points, dist, vmin=-0.003, vmax=0.003):
     fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot(111, projection='3d')
-    sc = ax.scatter(points[:, 2], -points[:, 0], points[:, 1], c=dist, cmap='plasma', s=2,vmin=vmin, vmax=vmax)
+
+    # define bin edges every 1mm (0.001 m)
+    levels = np.arange(vmin, vmax+0.001, 0.001)
+    norm = BoundaryNorm(levels, ncolors=plt.cm.plasma.N, clip=True)
+
+    sc = ax.scatter(points[:, 2], -points[:, 0], points[:, 1], 
+                    c=dist, cmap='plasma', norm=norm, s=2)
+
     ax.set_title("{} Deformation".format(label))
     ax.azim = 90
     ax.elev = 70
     plt.ylim(-0.3,0.3)
-    plt.xlim(0,0.3)
-    ax.set_zlim(0,0.4)
+    plt.xlim(-0.6,-0.3)
+    ax.set_zlim(-0.4,0.4)
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
     ax.set_zlabel("z [m]")
     ax.set_box_aspect([ub - lb for lb, ub in (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
-    cbar = fig.colorbar(sc, ax=ax, orientation='vertical', label='Displacement [m]')
-    cbar.ax.yaxis.tick_left()   
-    #cbar.set_ticklabels([])
-    cbar_pos = list(cbar.ax.get_position().bounds)
-    ax_hist = fig.add_axes([cbar_pos[i] + offset for i, offset in enumerate([0.02, 0, 0, 0])])
-    bins = np.linspace(vmin, vmax, 100 + 1)
-    hist, bins, patches = ax_hist.hist(dist, bins=bins, orientation='horizontal', color = 'gray', alpha=1)
-    for patch, bin_edge in zip(patches, bins[:-1]):
-        norm_val = (bin_edge - np.min(bins)) / (np.max(bins) - np.min(bins))
-        color = plt.cm.plasma(norm_val)  # Map bin value to colormap
-        patch.set_facecolor(color)
-    ax_hist.set_xticks(np.linspace(0,np.max(hist),2))
-    ax_hist.set_yticks(np.linspace(vmin, vmax, num=7))
-    ax_hist.set_yticklabels([])
-    ax_hist.set_ylim(vmin, vmax)
+
+    # discrete colorbar matching the 1 mm steps
+    cbar = fig.colorbar(sc, ax=ax, orientation='vertical', label='Displacement [m]', ticks=levels)
+    cbar.ax.tick_params(labelsize=8)
+
     return fig, sc
+    # fig = plt.figure(figsize=(8,8))
+    # ax = fig.add_subplot(111, projection='3d')
+    # sc = ax.scatter(points[:, 2], -points[:, 0], points[:, 1], c=dist, cmap='plasma', s=2,vmin=vmin, vmax=vmax)
+    # ax.set_title("{} Deformation".format(label))
+    # ax.azim = 90
+    # ax.elev = 70
+    # plt.ylim(-0.3,0.3)
+    # plt.xlim(0,0.3)
+    # ax.set_zlim(0,0.4)
+    # ax.set_xlabel("x [m]")
+    # ax.set_ylabel("y [m]")
+    # ax.set_zlabel("z [m]")
+    # ax.set_box_aspect([ub - lb for lb, ub in (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
+    # cbar = fig.colorbar(sc, ax=ax, orientation='vertical', label='Displacement [m]')
+    # cbar.ax.yaxis.tick_left()   
+    # #cbar.set_ticklabels([])
+    # cbar_pos = list(cbar.ax.get_position().bounds)
+    # ax_hist = fig.add_axes([cbar_pos[i] + offset for i, offset in enumerate([0.02, 0, 0, 0])])
+    # bins = np.linspace(vmin, vmax, 100 + 1)
+    # hist, bins, patches = ax_hist.hist(dist, bins=bins, orientation='horizontal', color = 'gray', alpha=1)
+    # for patch, bin_edge in zip(patches, bins[:-1]):
+    #     norm_val = (bin_edge - np.min(bins)) / (np.max(bins) - np.min(bins))
+    #     color = plt.cm.plasma(norm_val)  # Map bin value to colormap
+    #     patch.set_facecolor(color)
+    # ax_hist.set_xticks(np.linspace(0,np.max(hist),2))
+    # ax_hist.set_yticks(np.linspace(vmin, vmax, num=7))
+    # ax_hist.set_yticklabels([])
+    # ax_hist.set_ylim(vmin, vmax)
+    # return fig, sc
 
 def updateScatterPlot(sc, points, dist, vmin=-0.003, vmax=0.003):
     # Update the data for the scatter plot
@@ -90,9 +117,9 @@ def visContactEdge(label, points,vmin,vmax,dist):
     ax.set_title("{} Contact Patch Edge".format(label))
     ax.azim = 90
     ax.elev = 70
-    plt.ylim(-0.3,0.3)
-    plt.xlim(0,0.3)
-    ax.set_zlim(0,0.4)
+    plt.ylim(-0.1,0.2)
+    plt.xlim(-0.3,0)
+    ax.set_zlim(0.2,0.6)
     ax.set_box_aspect([ub - lb for lb, ub in (getattr(ax, f'get_{a}lim')() for a in 'xyz')])
     return fig
 
@@ -214,7 +241,7 @@ def saveImages():
 
 def makeVidfromImage(image_folder):
     #video_name = 'Inner_Deformation_updated_ICP_downsampled.avi'
-    video_name = 'hist_of_norm.avi' #'Outer_def_plane_max_100.avi'
+    video_name = '../DATA/STTR_test_21_1000mm_min_700kg_10sec_d3_c18_2bar.avi' #'Outer_def_plane_max_100.avi'
 
     images = [img for img in os.listdir(image_folder) if img.endswith((".jpg", ".jpeg", ".png"))]
     #print("Images:", images)
@@ -238,7 +265,7 @@ def makeVidfromImage(image_folder):
 
 def main():
     # makeVidfromImage("./Outer_Deformation/")
-    makeVidfromImage("./histnorm/")
+    makeVidfromImage("../DATA/STTR_test_21_1000mm_min_700kg_10sec_d3_c18_2bar/color/")
 
 if __name__ == "__main__":
     main()
