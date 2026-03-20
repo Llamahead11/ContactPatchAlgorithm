@@ -85,7 +85,7 @@ class read_RGB_D_folder:
     def get_next_frame(self):
         current_depth_np = np.asarray(o3d.io.read_image(self.depth_files[self.index]), np.float32) 
         current_color_np = np.asarray(o3d.io.read_image(self.color_files[self.index]), np.float32)
-        current_depth_np /= 10000
+        current_depth_np /= 10000.00025
         current_color_np /= 255
 
         # current_depth_np = current_depth.as_tensor().numpy()

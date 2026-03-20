@@ -12,12 +12,246 @@ import cupy as cp
 import csv
 
 import scipy.io as sio
+from sklearn.decomposition import PCA
+
+from scipy.optimize import minimize,least_squares
+
+#
+#find exact dimension of the tyre uninflated and inflated 
+# 
+#find move each point along its normal by that difference to simulate inflated tyre?
+
+def fit_radial_center(pts):
+    # PCA find radial plane first
+    pca = PCA(n_components=3).fit(pts)
+    radial_axis = pca.components_[-1]  # smallest eigenvector = radial
+
+    # Project all points onto radial plane
+    projection = pts - np.dot(pts, radial_axis)[:,None] * radial_axis
+
+    # Fit circle in 2D projected coordinates
+    mean_xy = np.median(projection, axis=0)
+    return mean_xy, radial_axis
+
+def fit_radial_center_circle(pts):
+    """
+    pts: (N,3) numpy array of points
+    Returns:
+        center_3d: 3D coordinates of radial center
+        radial_axis: unit vector along radial axis
+    """
+    # PCA to get radial axis (smallest eigenvector)
+    pca = PCA(n_components=3).fit(pts)
+    radial_axis = pca.components_[-1]
+
+    # Project points onto plane perpendicular to radial axis
+    proj_pts = pts - np.dot(pts, radial_axis)[:,None] * radial_axis
+    # proj_pts = proj_pts[proj_pts[:,1]**2 + proj_pts[:,2]**2 > 10**2]
+    # Fit circle in projected plane to get center
+    # For simplicity, approximate by centroid of projected points
+    # (you can do real circle fit if needed)
+    center_proj = np.median(proj_pts, axis=0)
+
+    # Reconstruct 3D center
+    center_3d = center_proj  # already in 3D (projection removes only radial component)
+    return center_3d, radial_axis
+
+def pca_align_pointcloud(pcd):
+    # Convert to numpy (N,3)
+    pts = pcd.point.positions.numpy()
+
+    # 1 Subtract centroid
+    # centroid = np.mean(pts, axis=0)
+    # pts_centered = pts - centroid
+    center, radial_axis = fit_radial_center_circle(pts)
+    center[2] = 0.14297444/0.03912
+    print(center,center*0.03912)
+    pts_centered = pts - center
+
+    proj_pts = pts_centered - np.dot(pts_centered, radial_axis)[:,None] * (radial_axis)
+
+    pca_plane = PCA(n_components=2).fit(proj_pts)
+    axis1, axis2 = pca_plane.components_  # two axes in rolling & width plane
+
+    # Construct rotation matrix
+    # Columns = desired X, Y, Z
+    R = np.column_stack([-radial_axis, axis2, axis1])
+    print(R)
+
+    pts_aligned = (R.T @ pts_centered.T).T
+    aligned_pcd = o3d.t.geometry.PointCloud()
+    aligned_pcd.point.positions = o3d.core.Tensor(pts_aligned)
+
+    # Save or visualize
+    # o3d.io.write_point_cloud("tyre_aligned.ply", aligned_pcd)
+    
+
+    # # 2 PCA using SVD
+    # H = np.dot(pts_centered.T, pts_centered)
+    # w, v = np.linalg.eig(H)  # v: eigenvectors (3x3)
+
+    # # Sort eigenvectors by eigenvalues descending
+    # idx = np.argsort(w)[::-1]
+    # v = v[:, idx]  # Columns = PCA axes
+
+    # # 3 Rotation to world coordinate system
+    # R = v.T  # align PCA principal axes to X, Y, Z
+
+    # # 4 Apply transform
+    # pts_aligned = (R @ pts_centered.T).T
+
+    # # Create new aligned point cloud
+    # aligned_pcd = o3d.geometry.PointCloud()
+    # aligned_pcd.points = o3d.utility.Vector3dVector(pts_aligned)
+
+    return aligned_pcd, R, center
+radius = 0.4
+height = 1.0
+resolution = 100  # number of segments around circumference
+
+# 1️⃣ Create cylinder (aligned with Z-axis by default)
+cylinder = o3d.geometry.TriangleMesh.create_cylinder(
+    radius=radius,
+    height=height,
+    resolution=resolution
+)
+
+# 2️⃣ Rotate from Z-axis → X-axis
+# Rotation about Y-axis by -90° (so new axis is X)
+R = cylinder.get_rotation_matrix_from_xyz((0, -np.pi / 2,0))
+cylinder.rotate(R, center=(0, 0, 0))
+
+# 3️⃣ Optional: center the cylinder at origin
+cylinder.translate([-height / 2, 0, 0])
+
+# 4️⃣ Add color for visibility
+cylinder.paint_uniform_color([0.2, 0.7, 1.0])
+t_cylinder = o3d.t.geometry.TriangleMesh.from_legacy(cylinder)
+t_cylinder.compute_vertex_normals()
+t_cylinder.compute_triangle_normals()
+# 5️⃣ Visualize
+# o3d.visualization.draw_geometries([cylinder])
+
+# Usage Example:
+pcd_outer = o3d.t.io.read_point_cloud("full_outer_outer_part_only.ply")
+pcd_inner = o3d.t.io.read_point_cloud("full_outer_inner_smoothed_part_only.ply")
+pcd_outer_copy = pcd_outer.clone()
+pcd_inner_copy = pcd_inner.clone()
+pcd_outer_copy.scale(scale = 0.0375, center = [0,0,0])
+pcd_inner_copy.scale(scale = 0.0375, center = [0,0,0])
+pcd_outer_down = pcd_outer.voxel_down_sample(voxel_size=0.3)
+pcd_inner_down = pcd_inner.voxel_down_sample(voxel_size=0.3)
+#pcd = pcd_outer #pcd_inner.append(pcd_outer)
+aligned_pcd_i, R_i, centroid_i = pca_align_pointcloud(pcd_inner_down)
+aligned_pcd_o, R_o, centroid_o = pca_align_pointcloud(pcd_outer_down)
+aligned_pcd_i.point.colors = pcd_inner.point.colors
+aligned_pcd_o.point.colors = pcd_outer.point.colors
+
+Ry = o3d.core.Tensor(np.array([[-1,0,0],[0,1,0],[0,0,-1]]))
+
+pcd_inner.translate(o3d.core.Tensor(-centroid_i))
+pcd_inner.rotate(o3d.core.Tensor(R_o.T), center=[0,0,0])
+pcd_inner.translate(-o3d.core.Tensor([0,0.0948+0.0355+0.0139 + 0.0001/0.0375, 0.0944-0.0216+0.0109-0.0018/0.0375]))
+pcd_inner.rotate(Ry, center = [0,0,0])
+pcd_inner.scale(scale = 0.0375, center = [0,0,0])
+pcd_outer.translate(o3d.core.Tensor(-centroid_o))
+pcd_outer.rotate(o3d.core.Tensor(R_o.T), center=[0,0,0])
+pcd_outer.translate(-o3d.core.Tensor([0,0.0948+0.0015+0.0025/0.0375, 0.0944-0.001-0.002/0.0375]))
+pcd_outer.rotate(Ry, center = [0,0,0])
+pcd_outer.scale(scale = 0.0375, center = [0,0,0])
+pcd_inner_down.translate(o3d.core.Tensor(-centroid_i))
+pcd_inner_down.rotate(o3d.core.Tensor(R_o.T), center=[0,0,0])
+pcd_inner_down.translate(-o3d.core.Tensor([0,0.0948+0.0355+0.0139+ 0.0001/0.0375, 0.0944-0.0216+0.0109-0.0018/0.0375]))
+pcd_inner_down.rotate(Ry, center = [0,0,0])
+pcd_inner_down.scale(scale = 0.0375, center = [0,0,0])
+pcd_outer_down.translate(o3d.core.Tensor(-centroid_o))
+pcd_outer_down.rotate(o3d.core.Tensor(R_o.T), center=[0,0,0])
+pcd_outer_down.translate(-o3d.core.Tensor([0,0.0948+0.0015+0.0025/0.0375, 0.0944-0.001-0.002/0.0375]))
+pcd_outer_down.rotate(Ry, center = [0,0,0])
+pcd_outer_down.scale(scale = 0.0375, center = [0,0,0])
+o3d.visualization.draw([pcd_outer_copy, pcd_inner_copy, pcd_inner,pcd_outer, t_cylinder])
+# .rotate(Ry, center = [0,0,0])
 
 
-start=np.array([0.0043582423,0.0006682535,0.2466])
-end=np.array([0.0038174386,0.0005853315,0.216])
+def tyre_radial_profile(pts):
+    # Assume pts are aligned and centered: shape (N, 3)
+    x = pts[:, 0]  # width or axial coordinate
+    y = pts[:, 1]  # lateral
+    z = pts[:, 2]  # circumferential
+    
+    r = np.sqrt(y**2 + z**2)
+    theta = np.arctan2(z, y)  # in radians (-π, π)
+    
+    # Wrap to 0–2π if needed
+    theta = np.mod(theta, 2*np.pi)
+    
+    return x, theta, r
 
-print(np.linalg.norm(end-start))
+angles = (np.linspace(0,360,18)*(np.pi/180))[:-1] + 0.174
+print(angles)
+
+x, theta, r = tyre_radial_profile(pcd_inner.point.positions.numpy())
+print(x.shape)
+idx_x_slice = np.flatnonzero(np.abs(x-0.0308) < 0.002)
+idx_closest = np.argmin(np.abs(theta[idx_x_slice][:, None] - angles[None, :]), axis=0)
+print(idx_closest)
+lug_pts = pcd_inner.point.positions.numpy()[idx_x_slice[idx_closest]]
+lug_radius = r[idx_x_slice[idx_closest]]
+lug_theta = theta[idx_x_slice[idx_closest]]
+# idx_closest = [18837,1884,21244,17853,16633,15413,13697,13181,4727,2529,4276,3374
+#   12290,8444,10649,12185,18498]
+print(lug_theta)
+print(lug_radius)
+plt.scatter(theta, x, c=r, s=1, cmap='viridis')
+plt.xlabel("Circumferential angle θ (rad)")
+plt.ylabel("Width (x)")
+plt.colorbar(label="Radial distance r (m)")
+plt.show()
+
+
+
+def fit_equal_radius_center(xy):
+    # xy: array of shape (N, 2)
+    x, y = xy[:, 0], xy[:, 1]
+    print(xy)
+    def residuals(c):
+        xc, yc = c
+        r = np.sqrt((x - xc)**2 + (y - yc)**2)
+        print(r-np.mean(r))
+        return r - np.mean(r)
+
+    # Initial guess: centroid
+    c0 = np.mean(xy, axis=0)
+    print(c0)
+    # c0 = np.array([0,0])
+    res = least_squares(residuals, c0, method='lm', ftol=1e-15, xtol=1e-15, gtol=1e-15)
+    xc, yc = res.x
+
+    # Optional: estimate best-fit radius
+    r = np.sqrt((x - xc)**2 + (y - yc)**2)
+    r_mean = np.mean(r)
+    r_std = np.std(r)
+    print(r)
+
+    return xc, yc, r_mean, r_std, res
+
+# pts = np.array([
+#     [1.0, 0.0],
+#     [0.0, 1.0],
+#     [-1.0, 0.1],
+#     [0.1, -1.1]
+# ])
+lug_pts = lug_pts.reshape(-1, 3)
+print(lug_pts)
+# print(lug_pts[0][0][:][0])
+xc, yc, r, spread, res = fit_equal_radius_center(lug_pts[:,1:])
+print(f"Center: ({xc:.4f}, {yc:.4f}), Radius: {r:.4f}, Spread: {spread:.4e}")
+
+#===============================================================================
+# start=np.array([0.0043582423,0.0006682535,0.2466])
+# end=np.array([0.0038174386,0.0005853315,0.216])
+
+# print(np.linalg.norm(end-start))
 
 #================================================================
 
@@ -225,7 +459,7 @@ print(np.linalg.norm(end-start))
 # o3d.visualization.draw([pcd_3])
 
 # markers, m_points, numeric_markers = load_rc_control_points('./full_outer.csv',0.03912)
-# #print(m_points)
+#print(m_points)
 
 # mean = np.mean(m_points, axis=0)
 # print(mean)
@@ -238,7 +472,7 @@ print(np.linalg.norm(end-start))
 
 # points_centered = april_tag_pcd.point.positions.numpy()  # pcd can be legacy or tensor, just convert
 
-# # Covariance matrix
+# Covariance matrix
 # cov = np.cov(points_centered.T)
 
 # # SVD

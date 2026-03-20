@@ -73,11 +73,17 @@ OptGpuTensorContactPatchAlgorithm/Inner_Deformation - Copy/
 OptGpuTensorContactPatchAlgorithm/Outer_Deformation - Copy/
 OptGpuTensorContactPatchAlgorithm/realsense2/
 OptGpuTensorContactPatchAlgorithm/saved_arrays/
+OptGpuTensorContactPatchAlgorithm/rolling_arrays/
+OptGpuTensorContactPatchAlgorithm/Tread_Deformation/
 OptGpuTensorContactPatchAlgorithm/SIFT_video/
 OptGpuTensorContactPatchAlgorithm/test1/
 OptGpuTensorContactPatchAlgorithm/track/
 OptGpuTensorContactPatchAlgorithm/hist/
-OptGpuTensorContactPatchAlgorithm/*.nsys-rep/
+OptGpuTensorContactPatchAlgorithm/*.nsys-rep
+
+OptGpuTensorContactPatchAlgorithm/cleat_6000_inner.png
+OptGpuTensorContactPatchAlgorithm/*.fig
+
 
 
 TensorContactPatchAlgorithm/Farne_video/
@@ -106,6 +112,12 @@ color/
 depth/
 DATA/
 
+first_day_data_04_09_2025/
+second_day_data_08_09_2025/
+third_day_data_09_09_2025/
+fourth_day_data_11_09_2025/
+fifth_day_data_15_09_2025/
+
 # Ignore point cloud and 3D mesh files
 *.pcd
 *.ply
@@ -123,5 +135,27 @@ DATA/
 *.lnk
 *.exe
 
-#vids
-.avi
+# Large data / videos
+*.mp4
+*.avi
+*.mat
+*.xlsx
+
+# Drawio temp/backups
+istvs_images/.$*.bkp
+istvs_images/.$*.dtmp
+istvs_images/*.fig
+istvs_images/*.svg
+istvs_images/*.jpg
+istvs_images/*.pdf
+
+
+# Keep .nsys-rep as files
+*.nsys-rep
+
+# Drawio temp/backup files
+istvs_images/.$*.bkp
+istvs_images/.$*.dtmp
+istvs_images/*.drawio
+istvs_images/Untitled Diagram.drawio'
+istvs_images/MIR_figs/

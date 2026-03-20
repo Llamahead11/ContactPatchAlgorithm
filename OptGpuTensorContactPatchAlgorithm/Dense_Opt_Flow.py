@@ -382,7 +382,7 @@ class DenseOptFlow:
         # calc x,y,z 3D flow from 2D trajectory
         subpixel_interp_vertex_map_gpu = cv2.cuda.remap(self.cv2_vertex_map_gpu_curr, self.map_x_gpu, self.map_y_gpu, interpolation=cv2.INTER_LINEAR, stream=self.stream)
         subpixel_interp_normal_map_gpu = cv2.cuda.remap(self.cv2_normal_map_gpu_curr, self.map_x_gpu, self.map_y_gpu, interpolation=cv2.INTER_LINEAR, stream=self.stream)
-
+        #normalise
         #assign next 2D traj
         self.traj_motion_2D_x = self.map_x_gpu
         self.traj_motion_2D_y = self.map_y_gpu

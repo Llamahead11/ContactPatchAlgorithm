@@ -136,15 +136,25 @@ def load_model_pcd(file_path="./4_row_model/4_row_model_HighPoly_Smoothed.ply", 
     Returns:
         pcd (o3d.geometry.PointCloud): Inner Tyre Model Point Cloud
     '''
+    # pcd = o3d.io.read_point_cloud(filename=file_path, format = 'auto',remove_nan_points=True, remove_infinite_points=True, print_progress = True)
+    # pcd.scale(scale = scale, center = [0,0,0])
+    # centroid = [0.02758715, -0.07112041, 0.14297444]
+    # pcd.translate(-centroid)
+    # R = [[2.52815128e-02, 3.33760291e-02, 9.99123058e-01], 
+    #     [-7.85843857e-01, 6.18424477e-01, -7.73910520e-04], 
+    #     [-6.17907985e-01, -7.85135152e-01,  4.18630537e-02]]
+    # pcd.rotate(R, center = [0,0,0])
+    # return pcd
     pcd = o3d.io.read_point_cloud(filename=file_path, format = 'auto',remove_nan_points=True, remove_infinite_points=True, print_progress = True)
     pcd.scale(scale = scale, center = [0,0,0])
-    centroid = [0.02758715, -0.07112041, 0.14297444]
+    centroid = np.array([0.02758715, -0.07112041, 0.14297444])*(scale/0.03912)
     pcd.translate(-centroid)
-    R = [[2.52815128e-02, 3.33760291e-02, 9.99123058e-01], 
+    R = np.array([[2.52815128e-02, 3.33760291e-02, 9.99123058e-01], 
         [-7.85843857e-01, 6.18424477e-01, -7.73910520e-04], 
-        [-6.17907985e-01, -7.85135152e-01,  4.18630537e-02]]
+        [-6.17907985e-01, -7.85135152e-01,  4.18630537e-02]])
     pcd.rotate(R, center = [0,0,0])
-    return pcd
+    tensor_pcd = o3d.t.geometry.PointCloud.from_legacy(pcd)
+    return tensor_pcd
 
 
 def load_model_ply(file_path="./4_row_model/4_row_model_HighPoly_Smoothed.ply", scale = 0.019390745853434508):
@@ -315,6 +325,7 @@ def register_t2cam_with_model(t2cam_pcd_cuda, tracked_t2cam, model_pcd_cuda,corr
     T = estimator.compute_transformation(icp_t2cam,icp_model,corres_vector, current_transform = curr_t)
     # mask = t2cam_pcd_cuda.point.positions[:,2] > 0.07
     # t2cam_pcd_cuda = t2cam_pcd_cuda.select_by_mask(mask)
+    print(T)
     t2cam_pcd_cuda.transform(T)
     icp_t2cam.transform(T)
     #o3d.visualization.draw([t2cam_pcd_cuda,model_pcd_cuda])
@@ -466,7 +477,7 @@ def pca_normal(points):
 
     return normal
 
-def ICP_register_T2Cam_with_model(p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2_points,cropped_model_cu, draw_reg):
+def ICP_register_T2Cam_with_model(rough_T,p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2_points,cropped_model_cu, draw_reg):
     '''
     Performs Iterative Closest Point Registration to the Undeformed Cropped Inner Model and Deformed Inner T2Cam PCD
 
@@ -488,9 +499,9 @@ def ICP_register_T2Cam_with_model(p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2_points,
     o3d_mid_xyz = o3d.core.Tensor.from_dlpack(dl_mid_xyz)
     
     # create mask to select the outer points in the pcd to avoid registration with the deformed parts
-    mask_min = ((cp_d_t2_points[:,0]-mid_xyz[0])**2+(cp_d_t2_points[:,1]-mid_xyz[1])**2+((cp_d_t2_points[:,2]-mid_xyz[2])/1.2)**2) > 0.14**2
+    mask_min = ((cp_d_t2_points[:,0]-mid_xyz[0])**2+(cp_d_t2_points[:,1]-mid_xyz[1])**2+((cp_d_t2_points[:,2]-mid_xyz[2])/1.2)**2) > 0.12**2
     mask_max = ((cp_d_t2_points[:,0]-mid_xyz[0])**2+(cp_d_t2_points[:,1]-mid_xyz[1])**2+((cp_d_t2_points[:,2]-mid_xyz[2])/1.2)**2) < 0.17**2
-    mask_model_min = ((cp_model_points[:,0]-mid_xyz_model[0])**2+(cp_model_points[:,1]-mid_xyz_model[1])**2+((cp_model_points[:,2]-mid_xyz_model[2])/1.2)**2) > 0.14**2
+    mask_model_min = ((cp_model_points[:,0]-mid_xyz_model[0])**2+(cp_model_points[:,1]-mid_xyz_model[1])**2+((cp_model_points[:,2]-mid_xyz_model[2])/1.2)**2) > 0.12**2
     mask_model_max = ((cp_model_points[:,0]-mid_xyz_model[0])**2+(cp_model_points[:,1]-mid_xyz_model[1])**2+((cp_model_points[:,2]-mid_xyz_model[2])/1.2)**2) < 0.17**2
     points_removed_def = cp_d_t2_points[mask_min & mask_max]
     points_model_removed = cp_model_points[mask_model_min & mask_model_max] 
@@ -519,13 +530,28 @@ def ICP_register_T2Cam_with_model(p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2_points,
     # print("Transformation is:")
     # print(reg_p2p.transformation)
     t2cam_pcd_cuda.transform(reg_p2p.transformation)
+    t2cam_removed_def.transform(reg_p2p.transformation)
     icp_t2cam = t2cam_pcd_cuda.select_by_index(p)
     icp_model = model_pcd_cuda.select_by_index(q)
     
-    n = pca_normal(t2cam_pcd_cuda.uniform_down_sample(100).point.positions.cpu().numpy())
-    reg_p2p.transformation[:3, 3] += o3d.core.Tensor(-n*0.013)
-    t2cam_pcd_cuda.translate(o3d.core.Tensor(-n*0.013).cuda())
+    full_T = reg_p2p.transformation.matmul(rough_T) 
+    print(full_T)
+    dist_to_cam=np.sqrt(full_T[1,3].cpu().numpy()**2 + full_T[2,3].cpu().numpy()**2)
+    alpha = 21*(np.pi/180) #14.2
+    x_translate = 0
+    y_translate = 0.2162+(0.07254*np.cos(alpha))-0.0393*np.sin(alpha) # 0.2162 + 0.07254 #rotate about  [0,0.2162,0]
+    z_translate = 0.07254*np.sin(alpha) + 0.0393*np.cos(alpha) # 0.0393 
+    xyz_translate = np.array([x_translate,y_translate,z_translate]) #+ np.array([0,0.01,0])
+    kinematic_dist = np.linalg.norm(xyz_translate)
 
+    dist_to_offset = 0.005 #0.015 #dist_to_cam - kinematic_dist
+    print("dist_to_cam",dist_to_cam)
+    print("kinematic_dist",kinematic_dist)
+    print("Dist_to_offset",dist_to_offset)
+    n = pca_normal(t2cam_pcd_cuda.uniform_down_sample(100).point.positions.cpu().numpy())
+    reg_p2p.transformation[:3, 3] += o3d.core.Tensor(-n*dist_to_offset)
+    t2cam_pcd_cuda.translate(o3d.core.Tensor(-n*dist_to_offset).cuda())
+    
     #create lookup table with 21 to 31mm and loadand subtract max def and apply translation to it
     #take change in distance of center of contact patch from depth map and minus max def and translate that amount
     # then calbration factor everytime you put in the camera
@@ -536,7 +562,7 @@ def ICP_register_T2Cam_with_model(p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2_points,
     
     # o3d.visualization.draw([t2cam_pcd_cuda,cropped_model_cu,icp_t2cam, icp_model,t2cam_removed_def.cpu(), model_points_removed.cpu()])
     #t2cam_pcd_cuda.point.positions = t2cam_pcd_cuda.point.positions.add(o3d.core.Tensor([0,0.01,-0.01],dtype=o3d.core.float32).cuda())
-    if draw_reg: 
+    if True: #draw_reg: 
         frame = o3d.t.geometry.TriangleMesh.create_coordinate_frame(size = 0.1,device=o3d.core.Device("CUDA:0"))
         frame.translate(o3d_mid_xyz)
         draw_registration_result(t2cam_pcd_cuda,cropped_model_cu,frame)
@@ -589,7 +615,7 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
         t_s_begin = time.time()
         
         ## register using ICP for better alignment
-        fine_T = ICP_register_T2Cam_with_model(p,q,model_pcd_cuda,t2cam_pcd_cuda,t2cam_pcd_cuda.point.positions,cropped_model_cuda,draw_reg)
+        fine_T = ICP_register_T2Cam_with_model(rough_T,p,q,model_pcd_cuda,t2cam_pcd_cuda,t2cam_pcd_cuda.point.positions,cropped_model_cuda,draw_reg)
         t_e_begin = time.time()
         event_segment_and_fine_align.record(stream_o3d_cp)
         #print("BEGIN:", t_e_begin-t_s_begin)
@@ -676,7 +702,7 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
         # d_colors_t = plt.get_cmap('plasma')(((d_dist_t - (-0.05)) / (0.05 - (-0.05))).get())
         # d_colors_t = d_colors_t[:, :3]
 
-        bins = np.linspace(-0.035, 0, 7)
+        bins = np.linspace(-0.035, 0, 20)
 
         # Digitize into bin indices
         bin_indices = np.digitize(d_dist.get(), bins) - 1
@@ -738,7 +764,7 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
         # t2_und_t.point.colors = o3d.core.Tensor(d_colors_t, dtype = o3d.core.float32).cuda()
         #t2_und_t = t2_und_t.uniform_down_sample(every_k_points = 10)
 
-        #o3d.visualization.draw_geometries([t2_d_pcd_cu.cpu().to_legacy(),t2_und_in.to_legacy()])
+        # o3d.visualization.draw([t2_d_pcd_cu_t.cpu(),t2_d_pcd_cu_o.cpu(),t2_und_in.cpu(), t2_d_pcd_cu.cpu()])
 
 
 
@@ -856,20 +882,20 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
         #valid_mask_cp_threshold = ((tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) & radius_mask).get()
 
         zero_def = ((tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) & (t_hit > -0.008) & (t_hit < -0.007))
-        valid_mask_radius_cp = (tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) & radius_mask
+        valid_mask_radius_cp =  radius_mask & (tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) 
 
-        # plt.figure(figsize=(6, 4))
-        # plt.hist(t_hit.get()[valid_mask_radius_cp.get()], bins=500, color='steelblue', edgecolor='black')
-        # plt.xlabel("Distance to fitted plane (m)")
-        # plt.ylabel("Number of points")
-        # plt.title("Histogram of distances to plane")
-        # plt.grid(True)
-        # plt.tight_layout()
-        # plt.show()
-        # plt.show(block=True)
+        plt.figure(figsize=(6, 4))
+        plt.hist(t_hit.get()[valid_mask_radius_cp.get()], bins=500, color='steelblue', edgecolor='black')
+        plt.xlabel("Distance to fitted plane (m)")
+        plt.ylabel("Number of points")
+        plt.title("Histogram of distances to plane")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+        plt.show(block=True)
 
-        max_stable = cp.percentile(t_hit[valid_mask_radius_cp], 20)
-        min_stable = cp.percentile(t_hit[valid_mask_radius_cp], 5)
+        max_stable = cp.percentile(t_hit[valid_mask_radius_cp], 15)
+        min_stable = cp.percentile(t_hit[valid_mask_radius_cp], 3)
         # print(min_stable, max_stable)
         mask_smallest = (t_hit < max_stable) & valid_mask_radius_cp & (t_hit > min_stable)
         max_def = ((tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) & (t_hit < -0.024))
@@ -1045,7 +1071,7 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
         plane.triangle.indices = o3d.core.Tensor([[0,1,2],[1,2,3]],dtype=o3d.core.int64).cuda()
         
         dist_to_plane = ((t2_d_pcd_cu_t.point.positions).matmul(normal) + D).flatten()
-        contact_patch_mask = dist_to_plane.abs() < 0.001
+        contact_patch_mask = dist_to_plane.abs() < 0.0021
 
         contact_patch = t2_d_pcd_cu_t.select_by_mask(contact_patch_mask)
 
@@ -1129,7 +1155,7 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
     # cp.cuda.Device().synchronize()
     #stream_ray.synchronize()
     #print(masked_pcd.point.positions.shape)
-    return fine_T, curr_valid_mask, t2_und_t, np.max(d_dist), cropped_model_cuda , d_dist, t2_d_pcd_cu_t, masked_pcd,plane, contact_patch_mask#t2_d_pcd_cu_t #1#t2_d_pcd_def
+    return fine_T, curr_valid_mask, t2_und_t, np.max(d_dist), cropped_model_cuda , d_dist, t2_d_pcd_cu_t, contact_patch,plane, contact_patch_mask#t2_d_pcd_cu_t #1#t2_d_pcd_def
 
 def calculate_surface_curvature(pcd, radius=0.1, max_nn=20):
     pcd_n = copy.deepcopy(pcd.to_legacy())
@@ -1273,6 +1299,19 @@ def main():
     model_pcd.rotate(o3d.core.Tensor(R), center = [0,0,0])
     model_pcd_cuda = model_pcd.cuda()
 
+    model_pcd2 = load_model_pcd(config["file_path_model"],scale)
+    model_pcd2.estimate_normals()
+    centroid = np.array([0.02758715, -0.07112041, 0.14297444])
+    # model_pcd.translate(o3d.core.Tensor(-centroid))
+    R = np.array([[2.52815128e-02, 3.33760291e-02, 9.99123058e-01], 
+        [-7.85843857e-01, 6.18424477e-01, -7.73910520e-04], 
+        [-6.17907985e-01, -7.85135152e-01,  4.18630537e-02]])
+    # model_pcd.rotate(o3d.core.Tensor(R), center = [0,0,0])
+    asd = o3d.t.geometry.PointCloud()
+    asd.point.positions = o3d.core.Tensor(m_points)
+    # o3d.visualization.draw([model_pcd,asd])
+    model_pcd_cuda2 = model_pcd2.cuda()
+
     #CREATE STREAMS
     stream_upload = cp.cuda.Stream(non_blocking = True)
     stream_download = cp.cuda.Stream(non_blocking = True)
@@ -1369,20 +1408,20 @@ def main():
 
     # boundary_pcd = o3d.t.geometry.PointCloud()
     #boundary_pcd.point.positions = o3d.core.Tensor(boundary_3d)
-    interior_pcd7 = o3d.t.geometry.PointCloud()
-    interior_pcd7.point.positions = o3d.core.Tensor(interior_3d7)
-    target_ds = interior_pcd7.voxel_down_sample(voxel_size=0.002)
-    interior_pcd7.translate(-target_ds.point.positions.mean(dim=0))
-    interior_pcd7.rotate(Rzg.cpu(), center = [0,0,0])
+    # interior_pcd7 = o3d.t.geometry.PointCloud()
+    # interior_pcd7.point.positions = o3d.core.Tensor(interior_3d7)
+    # target_ds = interior_pcd7.voxel_down_sample(voxel_size=0.002)
+    # interior_pcd7.translate(-target_ds.point.positions.mean(dim=0))
+    # interior_pcd7.rotate(Rzg.cpu(), center = [0,0,0])
+    # target_ds.rotate(Rzg.cpu(), center = [0,0,0])
+    # interior_pcd7.translate(-target_ds.point.positions.mean(dim=0)+o3d.core.Tensor([0,-0.007,0]))
+    interior_pcd8 = o3d.t.geometry.PointCloud()
+    interior_pcd8.point.positions = o3d.core.Tensor(interior_3d8)
+    target_ds = interior_pcd8.voxel_down_sample(voxel_size=0.002)
+    interior_pcd8.translate(-target_ds.point.positions.mean(dim=0))
+    interior_pcd8.rotate(Rzg.cpu(), center = [0,0,0])
     target_ds.rotate(Rzg.cpu(), center = [0,0,0])
-    interior_pcd7.translate(-target_ds.point.positions.mean(dim=0)+o3d.core.Tensor([0,-0.007,0]))
-    # interior_pcd8 = o3d.t.geometry.PointCloud()
-    # interior_pcd8.point.positions = o3d.core.Tensor(interior_3d8)
-    # target_ds = interior_pcd8.voxel_down_sample(voxel_size=0.002)
-    # interior_pcd8.translate(-target_ds.point.positions.mean(dim=0))
-    # #interior_pcd8.rotate(Rzg.cpu(), center = [0,0,0])
-    # #target_ds.rotate(Rzg.cpu(), center = [0,0,0])
-    # interior_pcd8.translate(-target_ds.point.positions.mean(dim=0)+o3d.core.Tensor([0,-0.007,0]))
+    interior_pcd8.translate(-target_ds.point.positions.mean(dim=0)+o3d.core.Tensor([0,-0.007,0]))
     # interior_pcd9 = o3d.t.geometry.PointCloud()
     # interior_pcd9.point.positions = o3d.core.Tensor(interior_3d9)
     # target_ds = interior_pcd9.voxel_down_sample(voxel_size=0.002)
@@ -1410,7 +1449,7 @@ def main():
         count, depth_image, color_image, t2cam_pcd_cuda, vertex_map_gpu, normal_map_gpu = imageStream.get_next_frame()
         time_ms = time_arr[count]
         print("IMAGE NUMBER:",count, time_ms)
-
+    # o3d.visualization.draw([t2cam_pcd_cuda,model_pcd])
     gpu_curr = cv2.cuda.GpuMat()
     gpu_curr_gray = cv2.cuda.GpuMat()
     
@@ -1495,7 +1534,7 @@ def main():
     mean_vel = []
     tracked_p_loc = []
 
-    bins = np.linspace(-0.035, 0, 7)
+    bins = np.linspace(-0.035, 0, 20)
     cmap = plt.get_cmap('plasma', len(bins)-1)
 
     # Create a dummy ScalarMappable with the same colormap and normalization
@@ -1572,6 +1611,7 @@ def main():
                         frame_gpu  = dense.detect2D(gpu_prev_gray, gpu_curr_gray)
                         gpu_bgr = dense.vis_hsv_2D()
                         map_x_gpu, map_y_gpu, curr_tracked_t2cam_pcd = dense.detect3D(count, vertex_map_gpu,normal_map_gpu_prev, normal_map_gpu)
+                        curr_tracked_t2cam_pcd.normalize_normals()
                         event_tracked_pcd.record(wrap_cv2_cp_stream)
                         dense.local_geo_calc()
                         dense.track_3D_vel(time_ms)
@@ -1626,6 +1666,7 @@ def main():
                         
             #stream_ray.synchronize()
             full_T = fine_T.matmul(rough_T)
+            print("FULL_T",full_T)
             inv_full_T = full_T.inv()
             with nvtx.annotate("vis rest", color="black"):
                 try:
@@ -1689,7 +1730,7 @@ def main():
                             #viewer3d.update_cloud(undeformed_outer= t2_d_pcd_inner_cu.cpu(), deformed_outer = outer_select.cpu(), prev_def = prev_outer_select.cpu(), outer_disp = outer_disp)
                             #viewer3d.update_cloud(deformed_outer = wrt_cam_outer_select.cpu(), outer_disp = outer_disp.cpu(), outer_vel = outer_vel.cpu())
                             #viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(), outer_disp = outer_disp.cpu(), outer_vel = outer_vel.cpu())
-                            viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(),undeformed_outer= t2_d_pcd_inner_cu.cpu())
+                            viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(),undeformed_outer= t2_d_pcd_inner_cu.cpu(), inter = interior_pcd8.cpu())
                             #undeformed_outer= t2_d_pcd_inner_cu.transform(inv_full_T).cpu(),, prev_def = prev_outer_select.cpu(), plane = plane.transform(inv_full_T).cpu()
                             #viewer3d.update_cloud(outer_disp = outer_disp.cpu())# .paint_uniform_color(o3d.core.Tensor([1,0,0])) .paint_uniform_color(o3d.core.Tensor([0,1,0]))
                             #viewer3d.update_cloud(deformed_outer = outer_select.transform(inv_full_T).paint_uniform_color(o3d.core.Tensor([1,0,0])).cpu(), outer_disp = outer_disp)                    
@@ -1784,7 +1825,9 @@ def main():
         ax.plot(tracked_p_loc[:,0],tracked_p_loc[:,1],tracked_p_loc[:,2], label='3D line')
         end_pcd = curr_tracked_t2cam_pcd.point.positions.cpu().numpy()
         model_pcd_np = model_pcd.point.positions.cpu().numpy()
+        model_pcd2_np = model_pcd2.point.positions.cpu().numpy()
         ax.scatter(model_pcd_np[::1000,0],model_pcd_np[::1000,1],model_pcd_np[::1000,2],c='r', marker='o')
+        ax.scatter(model_pcd2_np[::1000,0],model_pcd2_np[::1000,1],model_pcd2_np[::1000,2],c='b', marker='o')
         ax.scatter(end_pcd[::100,0],end_pcd[::100,1],end_pcd[::100,2],c='g', marker='o')
         set_axes_equal(ax)
         # Labels

@@ -305,7 +305,7 @@ def find_contact_points(def_pcd_last_layer,A,B,C,D,o3d_inv_full_T,centroid):
                         [v[2], 0, -v[0]],
                         [-v[1], v[0], 0]])
             R = np.eye(3) + vx + vx @ vx * (1/(1+c))
-        #contact_patch.point.positions = contact_patch.point.positions - (dist_to_plane[mask].reshape((-1, 1))).mul(normal.reshape((1, 3)))
+        #contact_patch.point.positions = contact_patch.point.positions - (dist_to_plane[ma5sk].reshape((-1, 1))).mul(normal.reshape((1, 3)))
         contact_patch.rotate(o3d.core.Tensor(R),center=[0,0,0])
         
         lugs = contact_patch.clone().cpu()
@@ -358,10 +358,14 @@ def find_contact_points(def_pcd_last_layer,A,B,C,D,o3d_inv_full_T,centroid):
                 alpha_list.append(0)
                 vor_list.append(0)
                 dA_list.append(0)
-        print(dA_list)
+        # print(dA_list)
 
         #dA_list = np.array(dA_list)
         cpa = np.sum([dA.sum() for dA in dA_list])
+        if cpa > 0.01107:
+            dA_list = [np.zeros_like(x) for x in dA_list]
+            # print("TRUEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+            # print(dA_list)
         # poly0_alpha = alphashape.alphashape(lug0.point.positions.numpy()[:,:2], alpha=0.08)
         # poly1_alpha = alphashape.alphashape(lug1.point.positions.numpy()[:,:2], alpha=0.08)
         # poly2_alpha = alphashape.alphashape(lug2.point.positions.numpy()[:,:2], alpha=0.08)
@@ -495,11 +499,11 @@ traction_arr = []
 net_force_est_arr = []
 tri_ind = triangle_indices()
 try:
-    for i in range(50,250+250):
-        if (i == 0) | (i == 1):
+    for i in range(5,670): #5,250+150
+        if (i == 170) | (i == 171) | (i == 542):
             continue
         else:
-            data = np.load(f"test_7/iteration_{i:03d}.npz")
+            data = np.load(f"D:/stored_arrays/STTR_test_21/iteration_{i:03d}.npz")
             print("Iteration", i)
             origins_uh = cp.asarray(data['orig']) #.reshape(480,848,3)
             hit_point_uh = cp.asarray(data['hit_p']) #.reshape(480,848,3)
@@ -919,7 +923,7 @@ try:
             c = normalised_colors(E_local)
             undef_vol.point.colors = o3d.core.Tensor.from_numpy(c)
             clean_undef_vol = undef_vol.select_by_mask(o3d_good_mask)
-            #o3d.visualization.draw([clean_undef_vol])
+            o3d.visualization.draw([clean_undef_vol])
 
 
             #==================================================================================================
@@ -1119,7 +1123,7 @@ finally:
     plt.show(block=False)
 
     # np.save('cpa_test_7.npy', contact_patch_area_arr)
-    #savemat("cpa_test_21.mat", {"data4": contact_patch_area_arr})
+    
     # force_contact_patch = sum(traction*area)
     # force_contact_patch = traction*
     traction_arr = np.array(traction_arr)
@@ -1146,6 +1150,14 @@ finally:
     plt.grid()
     plt.show(block=True)
 
+    # savemat(
+    # "force_STTR_test_21.mat",
+    # {
+    #     "cpa": contact_patch_area_arr,
+    #     "traction": traction_arr,
+    #     "net_force": net_force_est_arr
+    # }
+    # )
 exit(0)
 
 #========================

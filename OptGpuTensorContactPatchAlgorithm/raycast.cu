@@ -54,7 +54,7 @@ extern "C" __global__ void __raygen__rg()
     //computeRay( make_uint3( idx.x, idx.y, 0 ), dim, ray_origin, ray_direction );
 
     // Trace the ray against our scene hierarchy
-    float3 result = make_float3( 0 );
+    float3 result = make_float3( 0.0f );
     unsigned int p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11;
     optixTrace(
             params.inner_handle,
@@ -75,12 +75,17 @@ extern "C" __global__ void __raygen__rg()
     // result = make_float3(__int_as_float( p0 ),__int_as_float( p1 ),__int_as_float( p2 ));
     float t = length(result - ray_origin); // or pass t as payload
     params.hit_positions_inner[ray_id] = result;
-    if (t > 0.2f){
-        params.hit_positions_inner[ray_id] = make_float3( 0 );
+    if (t > 0.1f){
+        params.hit_positions_inner[ray_id] = make_float3( 0.0f );
+        // params.hit_distances_inner[ray_id] = 0.0f;
     }
     else{
         params.hit_distances_inner[ray_id] = -t;
     }
+    // if (ray_origin.x <= 0.1f && ray_origin.y <= 0.1f && ray_origin.z <= 0.1f){
+    //     params.hit_positions_inner[ray_id] = make_float3( 0.0f );
+    //     params.hit_distances_inner[ray_id] = 0.0f;
+    // }
     params.hit_tri_indices_inner[ray_id] = p3;
 
     if (p3 == 0){
@@ -104,19 +109,26 @@ extern "C" __global__ void __raygen__rg()
         
         params.hit_positions_inner[ray_id] = result;
         float t = length(result - ray_origin); // or pass t as payload
-        if (t > 0.2f){
-            params.hit_positions_inner[ray_id] = make_float3( 0 );
+        if (t > 0.1f){
+            params.hit_positions_inner[ray_id] = make_float3( 0.0f );
+            // params.hit_distances_inner[ray_id] = 0.0f;
         }
         else{
             params.hit_distances_inner[ray_id] = t;
         }
+        // if (ray_origin.x <= 0.1f && ray_origin.y <= 0.1f && ray_origin.z <= 0.1f){
+        //     params.hit_positions_inner[ray_id] = make_float3( 0.0f );
+        //     params.hit_distances_inner[ray_id] = 0.0f;
+        // }
         params.hit_tri_indices_inner[ray_id] = p3;
     }
     if (p3 == 0xFFFFFFFF){
         params.hit_tri_indices_inner[ray_id] = 0;
+        // params.hit_positions_inner[ray_id] = make_float3(0.0f);
+        // params.hit_distances_inner[ray_id] = 0.0f;
     }
     if (p3 != 0) {
-        float3 result_o = make_float3( 0 );
+        float3 result_o = make_float3( 0.0f );
         optixTrace(
                 params.outer_handle,
                 result,
@@ -138,19 +150,26 @@ extern "C" __global__ void __raygen__rg()
         params.hit_positions_outer[ray_id] = result_o;
         if (t_o > 0.1f){
             //|| t_o < 0.045
-            params.hit_positions_outer[ray_id] = make_float3( 0 );
+            params.hit_positions_outer[ray_id] = make_float3( 0.0f );
+            // params.hit_distances_outer[ray_id] = 0.0f;
         }
         else{
             params.hit_distances_outer[ray_id] = t_o;
         }
+        // if (result.x <= 0.3f && result.y <= 0.3f && result.z <= 0.3f){
+        //     params.hit_positions_outer[ray_id] = make_float3( 0.0f );
+        //     params.hit_distances_outer[ray_id] = 0.0f;
+        // }
         params.hit_tri_indices_outer[ray_id] = p7;
     }
     if (p7 == 0xFFFFFFFF){
         params.hit_tri_indices_outer[ray_id] = 0;
+        // params.hit_positions_outer[ray_id] = make_float3( 0.0f );
+        // params.hit_distances_outer[ray_id] = 0.0f;
     }
 
     if (p3 != 0) {
-        float3 result_t = make_float3( 0 );
+        float3 result_t = make_float3( 0.0f );
         optixTrace(
                 params.tread_handle,
                 result,
@@ -172,15 +191,22 @@ extern "C" __global__ void __raygen__rg()
         params.hit_positions_tread[ray_id] = result_t;
         if (t_t > 0.1f){
             //|| t_o < 0.045
-            params.hit_positions_tread[ray_id] = make_float3( 0 );
+            params.hit_positions_tread[ray_id] = make_float3( 0.0f );
+            // params.hit_distances_tread[ray_id] = 0.0f;
         }
         else{
             params.hit_distances_tread[ray_id] = t_t;
         }
+        // if (result.x <= 0.3f && result.y <= 0.3f && result.z <= 0.3f){
+        //     params.hit_positions_tread[ray_id] = make_float3( 0.0f );
+        //     params.hit_distances_tread[ray_id] = 0.0f;
+        // }
         params.hit_tri_indices_tread[ray_id] = p11;
     }
     if (p11 == 0xFFFFFFFF){
         params.hit_tri_indices_tread[ray_id] = 0;
+        // params.hit_positions_tread[ray_id] = make_float3( 0.0f );
+        // params.hit_distances_tread[ray_id] = 0.0f;
     }
     
     // Record results in our output raster
@@ -203,9 +229,9 @@ extern "C" __global__ void __miss__ms()
     float3 direction = optixGetWorldRayDirection();
     float3 hit_point = origin + t*direction; 
     unsigned int prim_id = 0;
-    optixSetPayload_0(__float_as_int(0.0f));
-    optixSetPayload_1(__float_as_int(0.0f));
-    optixSetPayload_2(__float_as_int(0.0f));
+    optixSetPayload_0(__float_as_uint(0.0f));
+    optixSetPayload_1(__float_as_uint(0.0f));
+    optixSetPayload_2(__float_as_uint(0.0f));
     optixSetPayload_3(prim_id);
 }
 
@@ -223,9 +249,9 @@ extern "C" __global__ void __closesthit__ch()
     float3 direction = optixGetWorldRayDirection();
     float3 hit_point = origin + t*direction; 
     unsigned int prim_id = optixGetPrimitiveIndex();
-    optixSetPayload_0(__float_as_int(hit_point.x));
-    optixSetPayload_1(__float_as_int(hit_point.y));
-    optixSetPayload_2(__float_as_int(hit_point.z));
+    optixSetPayload_0(__float_as_uint(hit_point.x));
+    optixSetPayload_1(__float_as_uint(hit_point.y));
+    optixSetPayload_2(__float_as_uint(hit_point.z));
     optixSetPayload_3(prim_id);
     // printf("Hit point: %f %f %f, tri_id: %u\n", hit_point.x, hit_point.y, hit_point.z, prim_id);
     // if (!isfinite(hit_point.x) || !isfinite(hit_point.y) || !isfinite(hit_point.z)) {
