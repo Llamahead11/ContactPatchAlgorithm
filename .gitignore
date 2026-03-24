@@ -1,7 +1,6 @@
 # Bytecode and cache
 __pycache__/
-legacy/TensorContactPatchAlgorithm/__pycache__/
-legacy/ContactPatchAlgorithm/__pycache__/
+legacy/**/__pycache__/
 OptTensorContactPatchAlgorithm/__pycache__/
 *.py[cod]
 *$py.class
@@ -33,9 +32,9 @@ var/
 .installed.cfg
 *.egg
 
-legacy/ContactPatchAlgorithm/rough_vis_deformation.build/
-legacy/ContactPatchAlgorithm/rough_vis_deformation.dist/
-legacy/ContactPatchAlgorithm/rough_vis_deformation.onefile-build/
+legacy/**/rough_vis_deformation.build/
+legacy/**/rough_vis_deformation.dist/
+legacy/**/rough_vis_deformation.onefile-build/
 
 
 # PyInstaller
@@ -86,30 +85,30 @@ OptGpuTensorContactPatchAlgorithm/*.fig
 
 
 
-legacy/TensorContactPatchAlgorithm/Farne_video/
-legacy/TensorContactPatchAlgorithm/hist/
-legacy/TensorContactPatchAlgorithm/hist_of_distances.avi/
-legacy/TensorContactPatchAlgorithm/hist_of_norm.avi/
-legacy/TensorContactPatchAlgorithm/histnorm/
-legacy/TensorContactPatchAlgorithm/Inner_Deformation/
-legacy/TensorContactPatchAlgorithm/Outer_Deformation/
-legacy/TensorContactPatchAlgorithm/realsense2/
-legacy/TensorContactPatchAlgorithm/SIFT_video/
-legacy/TensorContactPatchAlgorithm/test1/
-legacy/TensorContactPatchAlgorithm/track/
-legacy/TensorContactPatchAlgorithm/hist/
-legacy/TensorContactPatchAlgorithm/*.nsys-rep/
-legacy/TensorContactPatchAlgorithm/Inner_Deformation - Copy/
-legacy/TensorContactPatchAlgorithm/Outer_Deformation - Copy/
+legacy/**/Farne_video/
+legacy/**/hist/
+legacy/**/hist_of_distances.avi/
+legacy/**/hist_of_norm.avi/
+legacy/**/histnorm/
+legacy/**/Inner_Deformation/
+legacy/**/Outer_Deformation/
+legacy/**/realsense2/
+legacy/**/SIFT_video/
+legacy/**/test1/
+legacy/**/track/
+legacy/**/hist/
+legacy/**/*.nsys-rep/
+legacy/**/Inner_Deformation - Copy/
+legacy/**/Outer_Deformation - Copy/
 
-legacy/ContactPatchAlgorithm/Farne_video/
-legacy/ContactPatchAlgorithm/Farne_video - Copy/
-legacy/ContactPatchAlgorithm/Inner_Deformation/
-legacy/ContactPatchAlgorithm/Outer_Deformation/
-legacy/ContactPatchAlgorithm/realsense2/
-legacy/ContactPatchAlgorithm/SIFT_video/
-legacy/ContactPatchAlgorithm/LKD_video/
-legacy/ContactPatchAlgorithm/test1/
+legacy/**/Farne_video/
+legacy/**/Farne_video - Copy/
+legacy/**/Inner_Deformation/
+legacy/**/Outer_Deformation/
+legacy/**/realsense2/
+legacy/**/SIFT_video/
+legacy/**/LKD_video/
+legacy/**/test1/
 color/
 depth/
 DATA/
