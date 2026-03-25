@@ -4,22 +4,22 @@ Run_on_Jetson: False
 
 #DEBUG
 debug_mode: False
-view_video: False
+view_video: True
 draw_reg: False
 
 #MODEL SPECIFICATIONS2
 scale: 0.03787 #25  #12 #0.03757452 #0.03912 #0.03805#0.0378047581618546 #0.0376047581618546  #scale = 0.019390745853434508
-file_path_control_points: './full_outer.csv'
-file_path_model: 'full_outer_inner_part_only.ply'
-file_path_tread: 'full_outer_treads_part_only.ply'
-inner_to_outer: 'inner_to_outer_correspondences.npy'
-inner_to_treads: 'inner_to_treads_correspondences.npy'
+file_path_control_points: './assets/full_outer.csv'
+file_path_model: './assets/full_outer_inner_part_only.ply'
+file_path_tread: './assets/full_outer_treads_part_only.ply'
+inner_to_outer: './assets/inner_to_outer_correspondences.npy'
+inner_to_treads: './assets/inner_to_treads_correspondences.npy'
 
 #IMAGE_STREAM
-RGB_D_folder: '../DATA/STTR_test_8_1000mm_min_500kg_10sec_d3_c18_2bar' #'realsense2' #'../DATA/static_test_right_tyre_one_inward_turn_only_d3_c18_2bar' #'../DATA/rolling_test_right_tyre_full_rotation_backwards_d3_c18_2bar_test2' #'../DATA/static_test_right_tyre_one_inward_turn_only_d3_c18_2bar' #'realsense2' #'../DATA/unseated_medium_1_d3_c18' #'realsense2' #'../DATA/unseated_slow_1_d3_c18' #'../../DATA/temporal_cleat_over_test_eg_horizontal_10mm_disp_no_slip_d0_c0' #'realsense2' #'test1' #'realsense2' #'../../DATA/test_eg_horizontal_10mm_disp_no_slip_d0_c0' # 'realsense2'
+RGB_D_folder: './DATA/STTR_test_8_1000mm_min_500kg_10sec_d3_c18_2bar' #'realsense2' #'../DATA/static_test_right_tyre_one_inward_turn_only_d3_c18_2bar' #'../DATA/rolling_test_right_tyre_full_rotation_backwards_d3_c18_2bar_test2' #'../DATA/static_test_right_tyre_one_inward_turn_only_d3_c18_2bar' #'realsense2' #'../DATA/unseated_medium_1_d3_c18' #'realsense2' #'../DATA/unseated_slow_1_d3_c18' #'../../DATA/temporal_cleat_over_test_eg_horizontal_10mm_disp_no_slip_d0_c0' #'realsense2' #'test1' #'realsense2' #'../../DATA/test_eg_horizontal_10mm_disp_no_slip_d0_c0' # 'realsense2'
 image_depth_profile: 3 #3
 image_color_profile: 18 #18
-start_index: 5 #234 #150 #100
+start_index: 10 #234 #150 #100
 end_index: -1
 
 #CAMERA SETTINGS

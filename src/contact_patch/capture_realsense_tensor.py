@@ -54,9 +54,9 @@ class RealSenseManager:
         print("Depth Scale", depth_scale)
 
         if self.depth_num == 3:
-            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json").intrinsic_matrix).cuda()
+            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("./assets/real_time_camera_intrinsic.json").intrinsic_matrix).cuda()
         elif self.depth_num == 0:
-            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json").intrinsic_matrix).cuda()
+            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("./assets/camera_intrinsic.json").intrinsic_matrix).cuda()
 
 
         align_to = rs.stream.color

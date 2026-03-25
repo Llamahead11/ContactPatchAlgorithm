@@ -174,7 +174,7 @@ class OptiXRaycaster:
         # pcd.scale(scale = 0.03912, center = [0,0,0])
         # pcd.estimate_normals()
         # pcd.orient_normals_consistent_tangent_plane(k = 10)
-        normals = o3d.core.Tensor.load('inner_normals_oriented.npy')
+        normals = o3d.core.Tensor.load('./assets/inner_normals_oriented.npy')
         mesh = o3d.t.io.read_triangle_mesh(ply_path)
         mesh.scale(scale = self.scale, center = [0,0,0])
         centroid = np.array([0.42841208,-1.6929364,3.6547658 ])*self.scale

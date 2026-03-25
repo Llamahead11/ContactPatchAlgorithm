@@ -1392,7 +1392,7 @@ def main():
     """
     #===========================================================================================================================================
     ## LOAD CONFIG
-    with open("config.yaml", "r") as file:
+    with open("./src/contact_patch/config.yaml", "r") as file:
         config = yaml.safe_load(file)
     
     Real_Time = config["Real_Time"]
@@ -1496,7 +1496,7 @@ def main():
     outer_undef = []
     outer_undef_lat = []
 
-    outer_model_ply = o3d.t.io.read_triangle_mesh("full_outer_outer_part_only.ply")
+    outer_model_ply = o3d.t.io.read_triangle_mesh("./assets/full_outer_outer_part_only.ply")
     outer_model_ply.compute_vertex_normals()
     outer_model_ply.compute_triangle_normals()
     outer_model_ply.normalize_normals()
@@ -1504,7 +1504,7 @@ def main():
     outer_model_ply.rotate(o3d.core.Tensor(R), center = [0,0,0])
     outer_model_ply = outer_model_ply.cuda()
     
-    raycaster = OptiXRaycaster("full_outer_inner_smoothed_part_only.ply", "full_outer_outer_part_only.ply", "full_outer_treads_part_only.ply", "raycast.cu", stream_ray)
+    raycaster = OptiXRaycaster("./assets/full_outer_inner_smoothed_part_only.ply", "./assets/full_outer_outer_part_only.ply", "./assets/full_outer_treads_part_only.ply", "./src/contact_patch/raycast.cu", stream_ray)
 
     load_time = time.time() - start_time
     print("Loading Completed in",load_time)
@@ -1518,10 +1518,10 @@ def main():
 
     Rzg,tg,Rxg = align_to_ground_plane()
 
-    data7 = sio.loadmat("contact_patch_points_test_7.mat")
-    data8 = sio.loadmat("contact_patch_points_test_8.mat")
-    data9 = sio.loadmat("contact_patch_points_test_9.mat")
-    data21 = sio.loadmat("contact_patch_points_test_21.mat")
+    data7 = sio.loadmat("./assets/contact_patch_points_test_7.mat")
+    data8 = sio.loadmat("./assets/contact_patch_points_test_8.mat")
+    data9 = sio.loadmat("./assets/contact_patch_points_test_9.mat")
+    data21 = sio.loadmat("./assets/contact_patch_points_test_21.mat")
 
     #boundary = data["boundary_mm_all"]    
     interior7 = data7["interior_mm"].astype(np.float32) /1000
@@ -1995,7 +1995,7 @@ def main():
             if key == ord('p'):
                 print("Paused. Press any key to continue...")
                 key2 = cv2.waitKey(0)
-            key2 = cv2.waitKey(0)
+            #key2 = cv2.waitKey(0)
             print("Time for one frame:",time_sec)
             event_frame_done.record(stream_o3d_cp)
     except Exception as e:

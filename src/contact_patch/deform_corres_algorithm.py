@@ -318,100 +318,44 @@ def register_t2cam_with_model(t2cam_pcd_cuda, tracked_t2cam, model_pcd_cuda,corr
         model_pcd (o3d.geometry.PointCloud): open3d Point Cloud of inner tyre model
         corres_vector (o3d.utility.Vector2iVector): Correspondence array for registration 
     """
-    estimator = o3d.t.pipelines.registration.TransformationEstimationPointToPoint()
-    icp_t2cam = t2cam_pcd_cuda.select_by_index(p)
+    T = o3d.core.Tensor([[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,1]],dtype=o3d.core.float64).cuda() 
+    alpha = 19.2*(np.pi/180) #14.2 
+    x_translate = 0#+0.009 
+    y_translate = 0.2162 + 0.07254 #0.2162+(0.07254*np.cos(alpha))-0.0393*np.sin(alpha) # 0.2162 + 0.07254 #rotate about [0,0.2162,0] 
+    z_translate = 0.0393 #0.07254*np.sin(alpha) + 0.0393*np.cos(alpha) # 0.0393 
+    xyz_translate = np.array([x_translate,y_translate,z_translate]) #+ np.array([0,0.01,0]) 
+    xyz_tensor = o3d.core.Tensor(xyz_translate,dtype = o3d.core.float32).cuda() 
+    T[3,:3] = xyz_tensor 
+    Rx = np.array([[1, 0, 0], [0, np.cos(alpha), -np.sin(alpha)], [0, np.sin(alpha), np.cos(alpha)]]) 
+    Rx_tensor = o3d.core.Tensor(Rx,dtype = o3d.core.float32).cuda() 
+    print(xyz_tensor, Rx_tensor) 
+    estimator = o3d.t.pipelines.registration.TransformationEstimationPointToPoint() 
+    icp_t2cam = t2cam_pcd_cuda.select_by_index(p) 
+    icp_model = model_pcd_cuda.select_by_index(q) 
+    # # mask = t2cam_pcd_cuda.point.positions[:,2] > 0.07 # # 
+    # t2cam_pcd_cuda = t2cam_pcd_cuda.select_by_mask(mask) 
+    o3d.visualization.draw([t2cam_pcd_cuda,model_pcd_cuda,icp_t2cam,icp_model]) 
+    # # t2cam_pcd_cuda.transform(T) 
+    # # icp_t2cam.transform(T) 
+    # # t2cam_pcd_cuda.rotate(Rx_tensor, center=[0,0,0]) 
+    # # t2cam_pcd_cuda.translate(xyz_tensor) 
+    tracked_t2cam.translate(xyz_tensor) 
+    tracked_t2cam.rotate(Rx_tensor, center=[0,0.2162,0])
+
+    # estimator = o3d.t.pipelines.registration.TransformationEstimationPointToPoint()
+    # icp_t2cam = t2cam_pcd_cuda.select_by_index(p)
     
-    icp_model = model_pcd_cuda.select_by_index(q)
-    T = estimator.compute_transformation(icp_t2cam,icp_model,corres_vector, current_transform = curr_t)
-    # mask = t2cam_pcd_cuda.point.positions[:,2] > 0.07
-    # t2cam_pcd_cuda = t2cam_pcd_cuda.select_by_mask(mask)
-    print(T)
-    t2cam_pcd_cuda.transform(T)
-    icp_t2cam.transform(T)
+    # icp_model = model_pcd_cuda.select_by_index(q)
+    # T = estimator.compute_transformation(icp_t2cam,icp_model,corres_vector, current_transform = curr_t)
+    # # mask = t2cam_pcd_cuda.point.positions[:,2] > 0.07
+    # # t2cam_pcd_cuda = t2cam_pcd_cuda.select_by_mask(mask)
+    # print(T)
+    # t2cam_pcd_cuda.transform(T)
+    # icp_t2cam.transform(T)
     #o3d.visualization.draw([t2cam_pcd_cuda,model_pcd_cuda])
     #T without the y and z rotation, but include the x rotation?
     if tracked_t2cam != 1:
         tracked_t2cam.transform(T)
-        #mesh.transform(T)
-
-        # plane = o3d.t.geometry.TriangleMesh(device = o3d.core.Device("CUDA:0"))
-        # normal_p = o3d.core.Tensor([1,0,0],dtype=o3d.core.float32).cuda()
-        # A_p, B_p, C_p = normal_p #D = 0
-
-        # #A*x+B*y+C*z+D = 0
-        # y_p = o3d.core.Tensor([[-0.5,0.5,-0.5,0.5]],dtype=o3d.core.float32).cuda()
-        # z_p = o3d.core.Tensor([[-0.5,-0.5,0.5,0.5]],dtype=o3d.core.float32).cuda()
-        # x_p = - (B_p*y_p + C_p*z_p ) / A_p
-
-        # plane.vertex.positions = (x_p.append(y_p,axis = 0)).append(z_p,axis = 0).T()
-        # plane.triangle.indices = o3d.core.Tensor([[0,1,2],[1,2,3]],dtype=o3d.core.int64).cuda()
-
-        # dist_to_plane_twist = ((icp_t2cam.point.positions).matmul(normal_p)).flatten()
-        # dist_to_plane_model = ((icp_model.point.positions).matmul(normal_p)).flatten()
-        # mask_slice_twist = (dist_to_plane_twist > 0) & (dist_to_plane_twist < 0.015)
-        # mask_slice_model = (dist_to_plane_model > 0) & (dist_to_plane_model < 0.015)
-    
-        # centroid = icp_t2cam.select_by_mask(mask_slice_twist).get_center()
-        # pcd_centre = icp_t2cam.select_by_mask(mask_slice_twist).clone()
-        # pcd_centre.translate(-centroid)
-
-        # plane_twist = o3d.t.geometry.TriangleMesh(device = o3d.core.Device("CUDA:0"))
-        # if pcd_centre.point.positions.shape[0] != 0:
-        #     U,S,VT = pcd_centre.point.positions.svd()
-        #     normal = VT[-1]
-        #     A, B, C = normal
-        #     D = (-normal.mul(centroid)).sum(dim=0)
-
-        #     #A*x+B*y+C*z+D = 0
-        #     y = o3d.core.Tensor([[-0.5,0.5,-0.5,0.5]],dtype=o3d.core.float32).cuda()
-        #     z = o3d.core.Tensor([[-0.5,-0.5,0.5,0.5]],dtype=o3d.core.float32).cuda()
-        #     x = - (B*y + C*z + D) / A
-            
-        #     plane_twist.vertex.positions = (x.append(y,axis = 0)).append(z,axis = 0).T()
-        #     plane_twist.triangle.indices = o3d.core.Tensor([[0,1,2],[1,2,3]],dtype=o3d.core.int64).cuda()
-
-        # centroid_m = icp_model.select_by_mask(mask_slice_model).get_center()
-        # pcd_centre_m = icp_model.select_by_mask(mask_slice_model).clone()
-        # pcd_centre_m.translate(-centroid_m)
-
-        # plane_model = o3d.t.geometry.TriangleMesh(device = o3d.core.Device("CUDA:0"))
-        # if pcd_centre_m.point.positions.shape[0] != 0:
-        #     Um,Sm,VTm = pcd_centre_m.point.positions.svd()
-        #     normal_m = VTm[-1]
-        #     A_m, B_m, C_m = normal_m
-        #     D_m = (-normal_m.mul(centroid_m)).sum(dim=0)
-
-        #     #A*x+B*y+C*z+D = 0
-        #     y_m = o3d.core.Tensor([[-0.5,0.5,-0.5,0.5]],dtype=o3d.core.float32).cuda()
-        #     z_m = o3d.core.Tensor([[-0.5,-0.5,0.5,0.5]],dtype=o3d.core.float32).cuda()
-        #     x_m = - (B_m*y_m + C_m*z_m + D_m) / A_m
-            
-        #     plane_model.vertex.positions = (x_m.append(y_m,axis = 0)).append(z_m,axis = 0).T()
-        #     plane_model.triangle.indices = o3d.core.Tensor([[0,1,2],[1,2,3]],dtype=o3d.core.int64).cuda()
-        
-        # print("t2cam",normal)
-        # print("model", normal_m)
-
-        # n1 = normal.cpu().numpy()
-        # n2 = normal_m.cpu().numpy()
-        # dot = np.clip(np.dot(n1, n2), -1.0, 1.0)
-        # angle = np.arccos(dot)
-        # print(angle)
-        # if np.isclose(angle, 0.0):
-        #     return np.eye(3)     # already aligned
-        # if np.isclose(angle, np.pi):
-        #     # 180-degree rotation: axis is ambiguous. pick any orth perpendicular to n1.
-        #     # find a vector orthogonal to n1:
-        #     orth = np.array([1.0, 0.0, 0.0])
-        #     if np.allclose(np.abs(n1), orth):
-        #         orth = np.array([0.0, 1.0, 0.0])
-        #     axis = np.cross(n1, orth)
-        #     axis = normalize(axis)
-        #     return rotation_matrix_from_axis_angle(axis, np.pi)
-        # axis = np.cross(n1, n2)
-        # return rotation_matrix_from_axis_angle(axis, angle)
-        # o3d.visualization.draw([icp_t2cam, icp_model, plane_twist.cpu(), plane_model.cpu()])
-        #o3d.visualization.draw([icp_t2cam, icp_model])
     return T
     
 def draw_registration_result(source, target,frame):
@@ -529,10 +473,10 @@ def ICP_register_T2Cam_with_model(rough_T,p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2
     # print(reg_p2p)
     # print("Transformation is:")
     # print(reg_p2p.transformation)
-    t2cam_pcd_cuda.transform(reg_p2p.transformation)
-    t2cam_removed_def.transform(reg_p2p.transformation)
-    icp_t2cam = t2cam_pcd_cuda.select_by_index(p)
-    icp_model = model_pcd_cuda.select_by_index(q)
+    # t2cam_pcd_cuda.transform(reg_p2p.transformation)
+    # t2cam_removed_def.transform(reg_p2p.transformation)
+    # icp_t2cam = t2cam_pcd_cuda.select_by_index(p)
+    # icp_model = model_pcd_cuda.select_by_index(q)
     
     full_T = reg_p2p.transformation.matmul(rough_T) 
     print(full_T)
@@ -544,13 +488,13 @@ def ICP_register_T2Cam_with_model(rough_T,p,q,model_pcd_cuda,t2cam_pcd_cuda,d_t2
     xyz_translate = np.array([x_translate,y_translate,z_translate]) #+ np.array([0,0.01,0])
     kinematic_dist = np.linalg.norm(xyz_translate)
 
-    dist_to_offset = 0.005 #0.015 #dist_to_cam - kinematic_dist
-    print("dist_to_cam",dist_to_cam)
+    dist_to_offset = dist_to_cam - kinematic_dist #0.005 #0.015 #
+    # print("dist_to_cam",dist_to_cam)
     print("kinematic_dist",kinematic_dist)
     print("Dist_to_offset",dist_to_offset)
     n = pca_normal(t2cam_pcd_cuda.uniform_down_sample(100).point.positions.cpu().numpy())
-    reg_p2p.transformation[:3, 3] += o3d.core.Tensor(-n*dist_to_offset)
-    t2cam_pcd_cuda.translate(o3d.core.Tensor(-n*dist_to_offset).cuda())
+    # reg_p2p.transformation[:3, 3] += o3d.core.Tensor(-n*dist_to_offset)
+    # t2cam_pcd_cuda.translate(o3d.core.Tensor(-n*dist_to_offset).cuda())
     
     #create lookup table with 21 to 31mm and loadand subtract max def and apply translation to it
     #take change in distance of center of contact patch from depth map and minus max def and translate that amount
@@ -884,15 +828,15 @@ def inner_deformed_to_outer_deformed(p,q,rough_T,stream_o3d_cp,stream_ray,raycas
         zero_def = ((tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) & (t_hit > -0.008) & (t_hit < -0.007))
         valid_mask_radius_cp =  radius_mask & (tri_id_t != 0) & (hit_point_t != 0.0).all(axis = 1) 
 
-        plt.figure(figsize=(6, 4))
-        plt.hist(t_hit.get()[valid_mask_radius_cp.get()], bins=500, color='steelblue', edgecolor='black')
-        plt.xlabel("Distance to fitted plane (m)")
-        plt.ylabel("Number of points")
-        plt.title("Histogram of distances to plane")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-        plt.show(block=True)
+        # plt.figure(figsize=(6, 4))
+        # plt.hist(t_hit.get()[valid_mask_radius_cp.get()], bins=500, color='steelblue', edgecolor='black')
+        # plt.xlabel("Distance to fitted plane (m)")
+        # plt.ylabel("Number of points")
+        # plt.title("Histogram of distances to plane")
+        # plt.grid(True)
+        # plt.tight_layout()
+        # plt.show()
+        # plt.show(block=True)
 
         max_stable = cp.percentile(t_hit[valid_mask_radius_cp], 15)
         min_stable = cp.percentile(t_hit[valid_mask_radius_cp], 3)
@@ -1266,7 +1210,7 @@ def main():
     """
     #===========================================================================================================================================
     ## LOAD CONFIG
-    with open("config.yaml", "r") as file:
+    with open("./src/contact_patch/config.yaml", "r") as file:
         config = yaml.safe_load(file)
     
     Real_Time = config["Real_Time"]
@@ -1362,7 +1306,7 @@ def main():
     outer_undef = []
     outer_undef_lat = []
 
-    outer_model_ply = o3d.t.io.read_triangle_mesh("full_outer_outer_part_only.ply")
+    outer_model_ply = o3d.t.io.read_triangle_mesh("./src/contact_patch/full_outer_outer_part_only.ply")
     outer_model_ply.compute_vertex_normals()
     outer_model_ply.compute_triangle_normals()
     outer_model_ply.normalize_normals()
@@ -1370,7 +1314,7 @@ def main():
     outer_model_ply.rotate(o3d.core.Tensor(R), center = [0,0,0])
     outer_model_ply = outer_model_ply.cuda()
     
-    raycaster = OptiXRaycaster("full_outer_inner_smoothed_part_only.ply", "full_outer_outer_part_only.ply", "full_outer_treads_part_only.ply", "raycast.cu", stream_ray)
+    raycaster = OptiXRaycaster("./src/contact_patch/full_outer_inner_smoothed_part_only.ply", "./src/contact_patch/full_outer_outer_part_only.ply", "./src/contact_patch/full_outer_treads_part_only.ply", "./src/contact_patch/raycast.cu", stream_ray)
 
     load_time = time.time() - start_time
     print("Loading Completed in",load_time)
@@ -1384,10 +1328,10 @@ def main():
 
     Rzg,tg,Rxg = align_to_ground_plane()
 
-    data7 = sio.loadmat("contact_patch_points_test_7.mat")
-    data8 = sio.loadmat("contact_patch_points_test_8.mat")
-    data9 = sio.loadmat("contact_patch_points_test_9.mat")
-    data21 = sio.loadmat("contact_patch_points_test_21.mat")
+    data7 = sio.loadmat("./src/contact_patch/contact_patch_points_test_7.mat")
+    data8 = sio.loadmat("./src/contact_patch/contact_patch_points_test_8.mat")
+    data9 = sio.loadmat("./src/contact_patch/contact_patch_points_test_9.mat")
+    data21 = sio.loadmat("./src/contact_patch/contact_patch_points_test_21.mat")
 
     #boundary = data["boundary_mm_all"]    
     interior7 = data7["interior_mm"].astype(np.float32) /1000
@@ -1543,12 +1487,12 @@ def main():
     sm.set_array([])  # required for colorbar
 
     # Create figure and axes
-    fig, ax = plt.subplots(figsize=(2, 5))  # vertical colorbar
+    # fig, ax = plt.subplots(figsize=(2, 5))  # vertical colorbar
 
-    # Plot the colorbar
-    cbar = fig.colorbar(sm, cax=ax, ticks=bins)
-    cbar.set_label("Value bins")
-    plt.show(block=False)
+    # # Plot the colorbar
+    # cbar = fig.colorbar(sm, cax=ax, ticks=bins)
+    # cbar.set_label("Value bins")
+    # plt.show(block=False)
     
     ## LOOP THROUGH EACH FRAME 1 onwards
     #==========================================================================================================================================================================
@@ -1722,16 +1666,23 @@ def main():
                         plane.rotate(Rxg,center=tg)
 
                         if view_video:
-                            #draw_lines_lineset(prev_outer_deformed.select_by_mask(curr_valid_mask & prev_valid_mask).transform(inv_full_T).point.positions,t2_d_pcd_outer_cu.select_by_mask(curr_valid_mask & prev_valid_mask).transform(inv_full_T).point.positions,outer_disp)
-                            #draw_lines_lineset(prev_outer_deformed.select_by_mask(curr_valid_mask | prev_valid_mask).transform(inv_full_T).point.positions,t2_d_pcd_outer_cu.select_by_mask(curr_valid_mask | prev_valid_mask).transform(inv_full_T).point.positions,outer_disp)
+                            # draw_lines_lineset(prev_outer_deformed.select_by_mask(curr_valid_mask & prev_valid_mask).transform(inv_full_T).point.positions,t2_d_pcd_outer_cu.select_by_mask(curr_valid_mask & prev_valid_mask).transform(inv_full_T).point.positions,outer_disp)
+                            # draw_lines_lineset(prev_outer_deformed.select_by_mask(curr_valid_mask | prev_valid_mask).transform(inv_full_T).point.positions,t2_d_pcd_outer_cu.select_by_mask(curr_valid_mask | prev_valid_mask).transform(inv_full_T).point.positions,outer_disp)
                             #draw_lines_lineset(prev_points,curr_points,outer_disp)
-                            draw_lines_lineset(prev_points,curr_vel_points,outer_vel)
-                            # viewer3d.update_cloud(geometries = t2_d_pcd_inner_cu.cpu(),lines = t2_d_pcd_outer_cu.cpu())
-                            #viewer3d.update_cloud(undeformed_outer= t2_d_pcd_inner_cu.cpu(), deformed_outer = outer_select.cpu(), prev_def = prev_outer_select.cpu(), outer_disp = outer_disp)
-                            #viewer3d.update_cloud(deformed_outer = wrt_cam_outer_select.cpu(), outer_disp = outer_disp.cpu(), outer_vel = outer_vel.cpu())
-                            #viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(), outer_disp = outer_disp.cpu(), outer_vel = outer_vel.cpu())
-                            viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(),undeformed_outer= t2_d_pcd_inner_cu.cpu(), inter = interior_pcd8.cpu())
-                            #undeformed_outer= t2_d_pcd_inner_cu.transform(inv_full_T).cpu(),, prev_def = prev_outer_select.cpu(), plane = plane.transform(inv_full_T).cpu()
+                            # draw_lines_lineset(prev_points,curr_vel_points,outer_vel)
+                            viewer3d.update_cloud(geometries = t2_d_pcd_inner_cu.cpu(),lines = t2_d_pcd_outer_cu.cpu())
+                            # 
+                            # viewer3d.update_cloud(undeformed_outer= t2_d_pcd_inner_cu.cpu(), deformed_outer = outer_select.cpu(), prev_def = prev_outer_select.cpu(), outer_disp = outer_disp)
+                            #
+                            # viewer3d.update_cloud(deformed_outer = wrt_cam_outer_select.cpu(), outer_disp = outer_disp.cpu(), outer_vel = outer_vel.cpu())
+                            # 
+                            # CONTACT PATCH + DISP + VEL field
+                            # viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(), outer_disp = outer_disp.cpu(), outer_vel = outer_vel.cpu())
+                            # 
+                            # STTR INK PRINT COMPARISON
+                            # viewer3d.update_cloud(deformed_outer_shape = wrt_cam_outer_select.cpu(),undeformed_outer= t2_d_pcd_inner_cu.cpu(), inter = interior_pcd8.cpu())
+                            #
+                            # undeformed_outer= t2_d_pcd_inner_cu.transform(inv_full_T).cpu(),, prev_def = prev_outer_select.cpu(), plane = plane.transform(inv_full_T).cpu()
                             #viewer3d.update_cloud(outer_disp = outer_disp.cpu())# .paint_uniform_color(o3d.core.Tensor([1,0,0])) .paint_uniform_color(o3d.core.Tensor([0,1,0]))
                             #viewer3d.update_cloud(deformed_outer = outer_select.transform(inv_full_T).paint_uniform_color(o3d.core.Tensor([1,0,0])).cpu(), outer_disp = outer_disp)                    
                             viewer3d.tick()

@@ -104,9 +104,9 @@ class DenseOptFlow:
         self.depth_num = depth_profile
     
         if self.depth_num == 3:
-            self.intrinsic = o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json")
+            self.intrinsic = o3d.io.read_pinhole_camera_intrinsic("./assets/real_time_camera_intrinsic.json")
         elif self.depth_num == 0:
-            self.intrinsic = o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json")
+            self.intrinsic = o3d.io.read_pinhole_camera_intrinsic("./assets/camera_intrinsic.json")
 
         self.fx = self.intrinsic.intrinsic_matrix[0, 0]
         self.fy = self.intrinsic.intrinsic_matrix[1, 1]

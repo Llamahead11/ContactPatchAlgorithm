@@ -38,8 +38,9 @@ class CudaArrayInterface:
 class read_RGB_D_folder:
     def __init__(self, folder, starting_index=0, ending_index = -1,depth_num=3,debug_mode=True):
         self.folder = folder
-        self.depth_folder = os.path.join(os.path.dirname(__file__),folder, "depth")
-        self.color_folder = os.path.join(os.path.dirname(__file__),folder, "color")
+        cwd = os.getcwd()
+        self.depth_folder = os.path.join(cwd,folder, "depth")
+        self.color_folder = os.path.join(cwd,folder, "color")
         self.depth_num = depth_num
         self.index = starting_index
         self.end_index = ending_index
@@ -55,9 +56,9 @@ class read_RGB_D_folder:
         if self.debug_mode: print(self.index, self.depth_files[self.index],self.color_files[self.index])
         
         if self.depth_num == 3:
-            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("real_time_camera_intrinsic.json").intrinsic_matrix).cuda()
+            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("./assets/real_time_camera_intrinsic.json").intrinsic_matrix).cuda()
         elif self.depth_num == 0:
-            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("camera_intrinsic.json").intrinsic_matrix).cuda()
+            self.intrinsic = o3d.core.Tensor(o3d.io.read_pinhole_camera_intrinsic("./assets/camera_intrinsic.json").intrinsic_matrix).cuda()
 
 
         # Step 2: build triangle indices
