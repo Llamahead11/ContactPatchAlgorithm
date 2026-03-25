@@ -3,7 +3,7 @@ import numpy as np
 import open3d as o3d
 import time
 import matplotlib.pyplot as plt
-import vidVisualiser as vV
+# import vidVisualiser as vV
 import cupy as cp
 from matplotlib import cm
 from matplotlib.colors import Normalize

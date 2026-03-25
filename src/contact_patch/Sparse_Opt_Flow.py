@@ -3,7 +3,7 @@ import time
 import open3d as o3d
 import numpy as np
 import matplotlib.pyplot as plt
-import vidVisualiser as vV
+# import vidVisualiser as vV
 import cupy as cp
 
 class SparseOptFlow:

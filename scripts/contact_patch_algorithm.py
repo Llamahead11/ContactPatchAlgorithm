@@ -76,12 +76,13 @@ mpl.rcParams.update({
 #matplotlib.use("Agg")
 #from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from capture_realsense_tensor import RealSenseManager
-from replay_realsense_tensor import read_RGB_D_folder
-from Dense_Opt_Flow import DenseOptFlow
-from Sparse_Opt_Flow import SparseOptFlow
-from app_vis import Viewer3D
-import vidVisualiser as vV
+from contact_patch.capture_realsense_tensor import RealSenseManager
+from contact_patch.replay_realsense_tensor import read_RGB_D_folder
+from contact_patch.Dense_Opt_Flow import DenseOptFlow
+from contact_patch.Sparse_Opt_Flow import SparseOptFlow
+from contact_patch.app_vis import Viewer3D
+from contact_patch.optix_castrays import OptiXRaycaster
+# import vidVisualiser as vV
 import time
 import yaml
 from scipy.spatial import cKDTree
@@ -90,7 +91,6 @@ import os
 import cupy as cp
 import sys
 import copy
-from optix_castrays import OptiXRaycaster
 import nvtx
 import threading
 import scipy.io as sio
@@ -159,7 +159,7 @@ def load_rc_control_points(file_path="./4_row_model_control_points.csv",scale_fa
 
     return markers, m_points, numeric_markers
 
-def convert_rc_apriltag_hex_ids(file_path="./RCtoTag.csv"):
+def convert_rc_apriltag_hex_ids(file_path="./assets/RCtoTag.csv"):
     """
     Converts the AprilTag Ids from Reality Capture Model 
     corresponding to the conventional IDs. 
@@ -1392,7 +1392,7 @@ def main():
     """
     #===========================================================================================================================================
     ## LOAD CONFIG
-    with open("./src/contact_patch/config.yaml", "r") as file:
+    with open("./scripts/config.yaml", "r") as file:
         config = yaml.safe_load(file)
     
     Real_Time = config["Real_Time"]
@@ -1472,10 +1472,10 @@ def main():
 
     ## RUN_ON_JETSON = apriltag library, WINDOWS = robotpy_apriltag library
     if Run_on_Jetson:
-        from april_detect_jetson import DetectAprilTagsJetson
+        from contact_patch.april_detect_jetson import DetectAprilTagsJetson
         detector = DetectAprilTagsJetson(depth_profile=depth_profile,debug_mode=debug_mode)
     else:
-        from april_detect_windows import DetectAprilTagsWindows
+        from contact_patch.april_detect_windows import DetectAprilTagsWindows
         detector = DetectAprilTagsWindows(depth_profile=depth_profile,debug_mode=debug_mode)
 
     ## FIND PCD INDICES OF APRILTAG LOCATIONS 

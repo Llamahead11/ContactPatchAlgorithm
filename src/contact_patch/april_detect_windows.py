@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 import robotpy_apriltag
-from capture_realsense_tensor import RealSenseManager
+from contact_patch.capture_realsense_tensor import RealSenseManager
 from numba import njit
 
 class DetectAprilTagsWindows():

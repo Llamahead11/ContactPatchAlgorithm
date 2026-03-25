@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 import apriltag
-from capture_realsense_tensor import RealSenseManager
+from contact_patch.capture_realsense_tensor import RealSenseManager
 
 class DetectAprilTagsJetson():
     def __init__(self, depth_profile, debug_mode = True):

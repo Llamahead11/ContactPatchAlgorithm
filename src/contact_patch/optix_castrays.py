@@ -8,7 +8,7 @@ import optix
 from cuda.bindings import runtime, nvrtc
 import ctypes
 
-import path_util
+import contact_patch.path_util as path_util
 
 def checkNVRTC(result, prog = None):
     if result[0].value:
